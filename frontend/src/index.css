@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/* ============================================================
+   BIETMI ERP — Design System Tokens
+   Semantic tokens used across the UI Kit (src/components/ui).
+   Keep the names here in sync with docs/DESIGN_SYSTEM.md.
+   Do not add raw color classes (indigo-*, green-*, red-* …)
+   outside of components under src/components/ui or this file.
+   ============================================================ */
+@theme {
+  /* Primary (brand) — based on the existing indigo palette */
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+
+  /* Success */
+  --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+
+  /* Warning (amber) */
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-700: #b45309;
+
+  /* Danger */
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-600: #dc2626;
+  --color-danger-700: #b91c1c;
+
+  /* Surfaces */
+  --color-surface-1: #ffffff;
+  --color-surface-2: #f9fafb;
+  --color-on-accent: #ffffff;
+
+  /* Borders & text */
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-text-secondary: #6b7280;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/* Baseline */
+:root {
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface-2, #f9fafb);
+  color: #111827;
+}
+
+/* ============================================================
+   Print / PDF export — used by printable document views
+   (e.g. Bon de Commande). While printing, everything except the
+   `.print-area` is hidden and only the document pages output.
+   ============================================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* Only when a printable document is present do we hide the app chrome */
+  body:has(.print-area) * {
+    visibility: hidden;
+  }
+
+  body:has(.print-area) .print-area,
+  body:has(.print-area) .print-area * {
+    visibility: visible;
+  }
+
+  body:has(.print-area) .print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-shadow: none !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
