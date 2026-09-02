@@ -52,7 +52,22 @@
     "passwordChanged": "تم تغيير كلمة المرور بنجاح",
     "passwordMismatch": "كلمتا المرور غير متطابقتين",
     "passwordsRequired": "يرجى ملء جميع الحقول",
-    "passwordTooShort": "يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل"
+    "passwordTooShort": "يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل",
+    "forgotPassword": "نسيت كلمة المرور؟",
+    "forgotPasswordTitle": "استعادة كلمة المرور",
+    "forgotPasswordSubtitle": "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين إن كان مسجَّلاً.",
+    "email": "البريد الإلكتروني",
+    "sendResetLink": "إرسال رابط الاستعادة",
+    "sendingResetLink": "جارٍ الإرسال...",
+    "forgotPasswordSuccess": "إن كان البريد الإلكتروني مسجَّلاً في النظام، ستصلك رسالة خلال دقائق.",
+    "resetPasswordTitle": "إعادة تعيين كلمة المرور",
+    "resetPasswordSubtitle": "أدخل كلمة المرور الجديدة وتأكيدها.",
+    "setNewPassword": "تعيين كلمة المرور الجديدة",
+    "settingPassword": "جارٍ التعيين...",
+    "passwordResetSuccess": "تم تعيين كلمة المرور الجديدة بنجاح. يمكنك الآن تسجيل الدخول.",
+    "backToLogin": "العودة لتسجيل الدخول",
+    "invalidOrExpiredToken": "رابط الاستعادة غير صالح أو منتهي الصلاحية",
+    "emailInvalidFormat": "يرجى إدخال بريد إلكتروني صحيح"
   },
   "customers": {
     "title": "الزبائن",

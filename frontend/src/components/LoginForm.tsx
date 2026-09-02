@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/useAuth';
 import { Card } from './ui/Card';
@@ -100,6 +101,15 @@ export function LoginForm() {
           <Button type="submit" block disabled={isLoading}>
             {isLoading ? t('auth:loggingIn') : t('auth:login')}
           </Button>
+
+          <div className="text-center">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-primary-600 hover:text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+            >
+              {t('auth:forgotPassword')}
+            </Link>
+          </div>
         </form>
       </Card>
     </div>

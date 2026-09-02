@@ -20,6 +20,8 @@ import { PurchaseOrderDetailPage } from './components/PurchaseOrders/PurchaseOrd
 import { CompanySettingsPage } from './components/Settings/CompanySettingsPage';
 import { UsersPage } from './components/Users/UsersPage';
 import { ChangePasswordPage } from './components/Auth/ChangePasswordPage';
+import { ForgotPasswordPage } from './components/Auth/ForgotPasswordPage';
+import { ResetPasswordPage } from './components/Auth/ResetPasswordPage';
 import { useAuthRole } from './hooks/useAuthRole';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -133,7 +135,13 @@ function AppContent() {
   const { isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
-    return <LoginForm />;
+    return (
+      <Routes>
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="*" element={<LoginForm />} />
+      </Routes>
+    );
   }
 
   return <DashboardLayout />;

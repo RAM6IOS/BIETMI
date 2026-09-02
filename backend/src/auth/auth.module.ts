@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtStrategy } from '../common/strategies/jwt.strategy';
+import { MailModule } from '../mail/mail.module';
 
 const throttlerConfig =
   process.env.NODE_ENV === 'test'
@@ -24,6 +25,7 @@ const throttlerConfig =
   imports: [
     PrismaModule,
     PassportModule,
+    MailModule,
     ThrottlerModule.forRoot(throttlerConfig),
     JwtModule.register({
       global: true,

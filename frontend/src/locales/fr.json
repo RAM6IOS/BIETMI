@@ -52,7 +52,22 @@
     "passwordChanged": "Mot de passe modifié avec succès",
     "passwordMismatch": "Les deux mots de passe ne correspondent pas",
     "passwordsRequired": "Veuillez remplir tous les champs",
-    "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères"
+    "passwordTooShort": "Le mot de passe doit contenir au moins 8 caractères",
+    "forgotPassword": "Mot de passe oublié ?",
+    "forgotPasswordTitle": "Récupération du mot de passe",
+    "forgotPasswordSubtitle": "Saisissez votre adresse e-mail et nous vous enverrons un lien de réinitialisation si elle est enregistrée.",
+    "email": "Adresse e-mail",
+    "sendResetLink": "Envoyer le lien de récupération",
+    "sendingResetLink": "Envoi en cours...",
+    "forgotPasswordSuccess": "Si cette adresse e-mail est enregistrée dans le système, vous recevrez un message dans quelques minutes.",
+    "resetPasswordTitle": "Réinitialisation du mot de passe",
+    "resetPasswordSubtitle": "Saisissez et confirmez votre nouveau mot de passe.",
+    "setNewPassword": "Définir le nouveau mot de passe",
+    "settingPassword": "Définition en cours...",
+    "passwordResetSuccess": "Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.",
+    "backToLogin": "Retour à la connexion",
+    "invalidOrExpiredToken": "Le lien de réinitialisation est invalide ou a expiré",
+    "emailInvalidFormat": "Veuillez saisir une adresse e-mail valide"
   },
   "customers": {
     "title": "Clients",
