@@ -39,20 +39,29 @@ export class MailService implements OnModuleInit {
       });
       this.logger.log('Mail transporter: production SMTP');
     } else {
-      // Development: create a one-time Ethereal test account.
-      const testAccount = await nodemailer.createTestAccount();
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-      this.logger.log(
-        `Mail transporter: Ethereal (${testAccount.user}) — emails are fake and captured at https://ethereal.email`,
-      );
+      // Development: create a one-time Ethereal test account with fallback to jsonTransport if offline/timeout.
+      try {
+        const testAccount = await nodemailer.createTestAccount();
+        this.transporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+        this.logger.log(
+          `Mail transporter: Ethereal (${testAccount.user}) — emails are fake and captured at https://ethereal.email`,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Could not create Ethereal test account. Falling back to JSON transport: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        this.transporter = nodemailer.createTransport({
+          jsonTransport: true,
+        });
+      }
     }
   }
 
@@ -95,6 +104,8 @@ export class MailService implements OnModuleInit {
     const previewUrl = nodemailer.getTestMessageUrl(info);
     if (previewUrl) {
       this.logger.log(`Password reset email sent. Preview: ${previewUrl}`);
+    } else {
+      this.logger.log(`Password reset email sent (JSON transport).`);
     }
   }
 }
