@@ -56,7 +56,7 @@ ALTER TABLE "quote_lines" ADD CONSTRAINT "quote_lines_quote_id_fkey" FOREIGN KEY
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_quote_id_fkey" FOREIGN KEY ("quote_id") REFERENCES "quotes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- DropEnumValue: 'devis' from InvoiceStatus — flip existing rows then rebuild the type
-UPDATE "invoices" SET "status" = 'draft' WHERE "status" = 'devis';
+UPDATE "invoices" SET "status" = 'draft' WHERE "status"::text = 'devis';
 
 ALTER TYPE "InvoiceStatus" RENAME TO "InvoiceStatus_old";
 CREATE TYPE "InvoiceStatus" AS ENUM ('draft', 'issued', 'partially_paid', 'paid', 'overdue');
