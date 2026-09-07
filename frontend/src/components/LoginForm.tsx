@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/useAuth';
 import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
+import { API_BASE } from '../api/config';
 
 export function LoginForm() {
   const { t } = useTranslation();
@@ -20,7 +21,7 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/auth/login', {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

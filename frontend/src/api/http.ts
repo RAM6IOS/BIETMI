@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3000/api/v1';
+import { API_BASE } from './config';
 
 export class ApiError extends Error {
   status: number;
@@ -30,7 +30,7 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const token = getAuthToken();
-  const url = new URL(API_BASE + path);
+  const url = new URL(API_BASE + path, window.location.origin);
   if (options.params) {
     for (const [key, value] of Object.entries(options.params)) {
       if (value !== undefined && value !== '') {
