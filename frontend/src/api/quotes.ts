@@ -1,4 +1,4 @@
-import type { Invoice } from './invoices';
+import type { Invoice, PaymentMethod } from './invoices';
 import { ApiError, request } from './http';
 
 export { ApiError };
@@ -49,8 +49,11 @@ export interface Quote {
   status: QuoteStatusValue;
   objet: string | null;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: PaymentMethod[] | null;
   convertedToInvoiceId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -69,6 +72,8 @@ export interface QuoteLineInput {
 export interface QuoteInput {
   partnerId: string;
   objet?: string;
+  discountPercent?: number;
+  paymentMethods?: PaymentMethod[];
   lines: QuoteLineInput[];
 }
 

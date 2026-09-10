@@ -69,7 +69,9 @@ export class AuthService {
    * Security: Always returns the same generic message regardless of whether
    * the email exists in the system, to prevent user enumeration.
    */
-  async forgotPassword(email: string): Promise<typeof FORGOT_PASSWORD_RESPONSE> {
+  async forgotPassword(
+    email: string,
+  ): Promise<typeof FORGOT_PASSWORD_RESPONSE> {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user) {
@@ -90,8 +92,7 @@ export class AuthService {
       },
     });
 
-    const frontendUrl =
-      process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
 
     await this.mailService.sendPasswordResetEmail(user.email!, resetLink);

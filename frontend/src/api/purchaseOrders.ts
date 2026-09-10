@@ -1,4 +1,5 @@
 import { ApiError, request } from './http';
+import type { PaymentMethod } from './invoices';
 
 export { ApiError };
 
@@ -35,8 +36,11 @@ export interface PurchaseOrder {
   orderDate: string;
   status: PurchaseOrderStatusValue;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: PaymentMethod[] | null;
   createdAt: string;
   updatedAt: string;
   supplier?: PurchaseOrderSupplier;
@@ -54,6 +58,8 @@ export interface PurchaseOrderLineInput {
 export interface PurchaseOrderInput {
   supplierId: string;
   orderDate?: string;
+  discountPercent?: number;
+  paymentMethods?: PaymentMethod[];
   lines: PurchaseOrderLineInput[];
 }
 

@@ -104,8 +104,11 @@ describe('PurchaseOrdersService', () => {
           orderDate: new Date('2026-05-10'),
           status: 'draft',
           subtotal: new Prisma.Decimal('200'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('38'),
           totalAmount: new Prisma.Decimal('238'),
+          paymentMethods: Prisma.DbNull,
           lines: {
             create: [
               {
@@ -150,8 +153,11 @@ describe('PurchaseOrdersService', () => {
           orderDate: new Date('2026-05-10'),
           status: 'draft',
           subtotal: new Prisma.Decimal('10'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('1.9'),
           totalAmount: new Prisma.Decimal('11.9'),
+          paymentMethods: Prisma.DbNull,
           lines: {
             create: [
               {
@@ -160,6 +166,59 @@ describe('PurchaseOrdersService', () => {
                 quantity: new Prisma.Decimal('1'),
                 unitPrice: new Prisma.Decimal('10'),
                 lineTotal: new Prisma.Decimal('10'),
+              },
+            ],
+          },
+        },
+        include: PO_INCLUDE,
+      });
+    });
+
+    it('should apply a discount and compute TVA on the amount after discount', async () => {
+      prisma.partner.findUnique.mockResolvedValue({
+        id: SUPPLIER_ID,
+        type: 'supplier',
+      });
+      const tx = mockTransaction();
+      tx.$queryRaw.mockResolvedValue([{ last_number: 10 }]);
+      tx.purchaseOrder.create.mockResolvedValue({ id: UUID });
+
+      await service.create(PURCHASING, {
+        supplierId: SUPPLIER_ID,
+        orderDate: '2026-05-10',
+        discountPercent: 5,
+        paymentMethods: [{ label: 'Paiement comptant', percentage: 100 }],
+        lines: [
+          {
+            description: 'Item A',
+            unit: 'U',
+            quantity: 3,
+            unitPrice: 11.87,
+          },
+        ],
+      });
+
+      expect(tx.purchaseOrder.create).toHaveBeenCalledWith({
+        data: {
+          supplierId: SUPPLIER_ID,
+          createdByUserId: USER_ID,
+          orderNumber: '010',
+          orderDate: new Date('2026-05-10'),
+          status: 'draft',
+          subtotal: new Prisma.Decimal('35.61'),
+          discountPercent: new Prisma.Decimal('5.00'),
+          discountAmount: new Prisma.Decimal('1.78'),
+          tvaAmount: new Prisma.Decimal('6.43'),
+          totalAmount: new Prisma.Decimal('40.26'),
+          paymentMethods: [{ label: 'Paiement comptant', percentage: 100 }],
+          lines: {
+            create: [
+              {
+                description: 'Item A',
+                unit: 'U',
+                quantity: new Prisma.Decimal('3'),
+                unitPrice: new Prisma.Decimal('11.87'),
+                lineTotal: new Prisma.Decimal('35.61'),
               },
             ],
           },

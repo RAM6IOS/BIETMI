@@ -43,6 +43,11 @@ export interface InvoiceLine {
   lineTotal: string;
 }
 
+export type PaymentMethod = {
+  label: string;
+  percentage: number;
+};
+
 export interface Invoice {
   id: string;
   invoiceNumber: string | null;
@@ -52,8 +57,11 @@ export interface Invoice {
   dueDate: string | null;
   status: InvoiceStatusValue;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: PaymentMethod[] | null;
   internalReference: string | null;
   objet: string | null;
   createdAt: string;
@@ -76,6 +84,8 @@ export interface InvoiceInput {
   dueDate?: string;
   internalReference?: string;
   objet?: string;
+  discountPercent?: number;
+  paymentMethods?: PaymentMethod[];
   lines: InvoiceLineInput[];
 }
 
@@ -88,8 +98,11 @@ export interface InvoiceSummary {
   dueDate: string | null;
   status: InvoiceStatusValue;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: PaymentMethod[] | null;
   createdAt: string;
 }
 

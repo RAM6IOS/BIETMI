@@ -139,8 +139,34 @@ describe('Invoices (e2e)', () => {
       expect(res.body.status).toBe('draft');
       expect(res.body.invoiceNumber).toBeNull();
       expect(res.body.subtotal).toBe('200.00');
+      expect(res.body.discountPercent).toBe('0.00');
+      expect(res.body.discountAmount).toBe('0.00');
       expect(res.body.tvaAmount).toBe('38.00');
       expect(res.body.totalAmount).toBe('238.00');
+      expect(res.body.paymentMethods).toBeNull();
+    });
+
+    it('should apply a discount and compute TVA on the amount after discount', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          partnerId: customerId,
+          issueDate: '2026-01-15',
+          discountPercent: 10,
+          paymentMethods: [{ label: 'Paiement à 30 jours', percentage: 100 }],
+          lines: [{ description: 'Item A', quantity: 2, unitPrice: 500 }],
+        })
+        .expect(201);
+
+      expect(res.body.subtotal).toBe('1000.00');
+      expect(res.body.discountPercent).toBe('10.00');
+      expect(res.body.discountAmount).toBe('100.00');
+      expect(res.body.tvaAmount).toBe('171.00');
+      expect(res.body.totalAmount).toBe('1071.00');
+      expect(res.body.paymentMethods).toEqual([
+        { label: 'Paiement à 30 jours', percentage: 100 },
+      ]);
     });
 
     it('should reject a sale invoice linked to a supplier', async () => {

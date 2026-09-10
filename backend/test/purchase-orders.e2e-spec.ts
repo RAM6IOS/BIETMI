@@ -14,8 +14,11 @@ interface PurchaseOrderResponse {
   orderNumber: string;
   status: string;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: Array<{ label: string; percentage: number }> | null;
   supplier: { id: string; name: string; type: string; nif: string | null };
   createdBy: { id: string; username: string; fullName: string };
   lines: Array<{
@@ -142,8 +145,11 @@ describe('PurchaseOrders (e2e)', () => {
     expect(body.supplier.type).toBe('supplier');
     expect(body.createdBy.username).toBe('po_admin');
     expect(body.subtotal).toBe('200.00');
+    expect(body.discountPercent).toBe('0.00');
+    expect(body.discountAmount).toBe('0.00');
     expect(body.tvaAmount).toBe('38.00');
     expect(body.totalAmount).toBe('238.00');
+    expect(body.paymentMethods).toBeNull();
     expect(body.lines).toHaveLength(1);
     expect(body.lines[0]).toEqual(
       expect.objectContaining({
@@ -177,6 +183,36 @@ describe('PurchaseOrders (e2e)', () => {
     expect(body.totalAmount).toBe('42.38');
     expect(body.lines).toHaveLength(3);
     expect(body.lines[1].unit).toBeNull();
+  });
+
+  it('applies a discount and computes TVA on the amount after discount', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/purchase-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        supplierId,
+        orderDate: '2026-05-10',
+        discountPercent: 5,
+        paymentMethods: [
+          { label: 'Paiement comptant', percentage: 60 },
+          { label: 'Solde à la livraison', percentage: 40 },
+        ],
+        lines: [
+          { description: 'Item A', unit: 'U', quantity: 3, unitPrice: 11.87 },
+        ],
+      })
+      .expect(201);
+
+    const body = res.body as PurchaseOrderResponse;
+    expect(body.subtotal).toBe('35.61');
+    expect(body.discountPercent).toBe('5.00');
+    expect(body.discountAmount).toBe('1.78');
+    expect(body.tvaAmount).toBe('6.43');
+    expect(body.totalAmount).toBe('40.26');
+    expect(body.paymentMethods).toEqual([
+      { label: 'Paiement comptant', percentage: 60 },
+      { label: 'Solde à la livraison', percentage: 40 },
+    ]);
   });
 
   it('rejects an order linked to a non-supplier partner', async () => {

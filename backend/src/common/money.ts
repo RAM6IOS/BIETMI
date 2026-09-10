@@ -13,6 +13,7 @@ export function computeTotals(
     quantity: number;
     unitPrice: number;
   }[],
+  discountPercent = 0,
 ) {
   const computed = lines.map((line) => {
     const qty = new Prisma.Decimal(String(line.quantity));
@@ -27,8 +28,20 @@ export function computeTotals(
   }
   subtotal = round2(subtotal);
 
-  const tvaAmount = round2(subtotal.mul(TVA_RATE));
-  const totalAmount = round2(subtotal.plus(tvaAmount));
+  const discountAmount = round2(
+    subtotal.mul(new Prisma.Decimal(String(discountPercent))).div(100),
+  );
+  const amountAfterDiscount = subtotal.minus(discountAmount);
 
-  return { computed, subtotal, tvaAmount, totalAmount };
+  const tvaAmount = round2(amountAfterDiscount.mul(TVA_RATE));
+  const totalAmount = round2(amountAfterDiscount.plus(tvaAmount));
+
+  return {
+    computed,
+    subtotal,
+    discountAmount,
+    amountAfterDiscount,
+    tvaAmount,
+    totalAmount,
+  };
 }

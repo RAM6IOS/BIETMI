@@ -295,11 +295,13 @@ describe('AuthService', () => {
       .update(RAW_TOKEN)
       .digest('hex');
 
-    function makeDbToken(overrides: Partial<{
-      used: boolean;
-      expiresAt: Date;
-      userId: string;
-    }> = {}) {
+    function makeDbToken(
+      overrides: Partial<{
+        used: boolean;
+        expiresAt: Date;
+        userId: string;
+      }> = {},
+    ) {
       return {
         id: 'token-uuid',
         userId: 'user-uuid',

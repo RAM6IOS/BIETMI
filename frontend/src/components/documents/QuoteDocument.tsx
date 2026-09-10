@@ -18,8 +18,14 @@ export function QuoteDocument({
       createdByFullName={quote.createdBy?.fullName}
       objet={quote.objet}
       subtotal={quote.subtotal}
+      discountPercent={quote.discountPercent}
+      discountAmount={quote.discountAmount}
       tvaAmount={quote.tvaAmount}
       totalAmount={quote.totalAmount}
+      paymentMethods={(quote.paymentMethods ?? []).map((m) => ({
+        label: m.label,
+        percentage: Number(m.percentage),
+      }))}
       lines={quote.lines ?? []}
       company={company}
     />

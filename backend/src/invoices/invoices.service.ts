@@ -11,7 +11,8 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { ListInvoicesDto } from './dto/list-invoices.dto';
 import type { AuthUser } from '../common/decorators/current-user.decorator';
-import { computeTotals } from '../common/money';
+import { computeTotals, round2 } from '../common/money';
+import { normalizePaymentMethods } from '../common/payment-methods';
 import {
   forbiddenWithCode,
   conflictWithCode,
@@ -87,9 +88,8 @@ export class InvoicesService {
     this.assertCanWrite(user);
     await this.validatePartner(dto.partnerId);
 
-    const { computed, subtotal, tvaAmount, totalAmount } = computeTotals(
-      dto.lines,
-    );
+    const { computed, subtotal, discountAmount, tvaAmount, totalAmount } =
+      computeTotals(dto.lines, dto.discountPercent ?? 0);
 
     return this.prisma.invoice.create({
       data: {
@@ -101,8 +101,14 @@ export class InvoicesService {
         objet: dto.objet ?? null,
         status: InvoiceStatus.draft,
         subtotal,
+        discountPercent: round2(
+          new Prisma.Decimal(String(dto.discountPercent ?? 0)),
+        ),
+        discountAmount,
         tvaAmount,
         totalAmount,
+        paymentMethods:
+        normalizePaymentMethods(dto.paymentMethods) ?? Prisma.DbNull,
         lines: {
           create: computed.map((line) => ({
             description: line.description,
@@ -251,6 +257,10 @@ export class InvoicesService {
       internalReference:
         dto.internalReference !== undefined ? dto.internalReference : undefined,
       objet: dto.objet !== undefined ? dto.objet : undefined,
+      paymentMethods:
+        dto.paymentMethods !== undefined
+          ? (normalizePaymentMethods(dto.paymentMethods) ?? Prisma.DbNull)
+          : undefined,
     };
 
     if (dto.partnerId !== undefined) {
@@ -258,23 +268,39 @@ export class InvoicesService {
       data.partner = { connect: { id: dto.partnerId } };
     }
 
-    if (dto.lines) {
-      const { computed, subtotal, tvaAmount, totalAmount } = computeTotals(
-        dto.lines,
-      );
+    if (dto.lines !== undefined || dto.discountPercent !== undefined) {
+      const effectiveDiscountPercent =
+        dto.discountPercent ?? Number(invoice.discountPercent ?? 0);
+      const effectiveLines = dto.lines ?? [
+        ...invoice.lines.map((line) => ({
+          description: line.description,
+          unit: line.unit ?? undefined,
+          quantity: Number(line.quantity),
+          unitPrice: Number(line.unitPrice),
+        })),
+      ];
+
+      const { computed, subtotal, discountAmount, tvaAmount, totalAmount } =
+        computeTotals(effectiveLines, effectiveDiscountPercent);
       data.subtotal = subtotal;
+      data.discountPercent = round2(
+        new Prisma.Decimal(String(effectiveDiscountPercent)),
+      );
+      data.discountAmount = discountAmount;
       data.tvaAmount = tvaAmount;
       data.totalAmount = totalAmount;
-      data.lines = {
-        deleteMany: {},
-        create: computed.map((line) => ({
-          description: line.description,
-          unit: line.unit ?? null,
-          quantity: new Prisma.Decimal(String(line.quantity)),
-          unitPrice: new Prisma.Decimal(String(line.unitPrice)),
-          lineTotal: line.lineTotal,
-        })),
-      };
+      if (dto.lines !== undefined) {
+        data.lines = {
+          deleteMany: {},
+          create: computed.map((line) => ({
+            description: line.description,
+            unit: line.unit ?? null,
+            quantity: new Prisma.Decimal(String(line.quantity)),
+            unitPrice: new Prisma.Decimal(String(line.unitPrice)),
+            lineTotal: line.lineTotal,
+          })),
+        };
+      }
     }
 
     return this.prisma.invoice.update({

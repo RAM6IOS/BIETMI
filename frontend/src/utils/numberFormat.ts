@@ -26,6 +26,13 @@ export function formatNumberFR(value: string | number): string {
   return FLEX_FORMATTER.format(num);
 }
 
+export function formatPercentageFR(value: string | number): string {
+  const num = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(num)) return '—';
+  const rounded = Math.round(num * 100) / 100;
+  return String(rounded).replace('.', ',');
+}
+
 export function formatDateFR(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';

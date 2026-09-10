@@ -9,6 +9,8 @@ import { map } from 'rxjs/operators';
 
 const MONEY_FIELDS = new Set([
   'subtotal',
+  'discountPercent',
+  'discountAmount',
   'tvaAmount',
   'totalAmount',
   'lineTotal',

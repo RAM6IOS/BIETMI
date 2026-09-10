@@ -152,8 +152,11 @@ describe('QuotesService', () => {
           objet: null,
           status: QuoteStatus.draft,
           subtotal: new Prisma.Decimal('200'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('38'),
           totalAmount: new Prisma.Decimal('238'),
+          paymentMethods: Prisma.DbNull,
           lines: {
             create: [
               {
@@ -197,8 +200,11 @@ describe('QuotesService', () => {
           objet: null,
           status: QuoteStatus.draft,
           subtotal: new Prisma.Decimal('35.61'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('6.77'),
           totalAmount: new Prisma.Decimal('42.38'),
+          paymentMethods: Prisma.DbNull,
           lines: {
             create: [
               {
@@ -221,6 +227,51 @@ describe('QuotesService', () => {
                 quantity: new Prisma.Decimal('5'),
                 unitPrice: new Prisma.Decimal('1.115'),
                 lineTotal: new Prisma.Decimal('5.58'),
+              },
+            ],
+          },
+        },
+        include: QUOTE_INCLUDE,
+      });
+    });
+
+    it('should apply a discount and compute TVA on the amount after discount', async () => {
+      prisma.partner.findUnique.mockResolvedValue({
+        id: PARTNER_ID,
+        type: 'customer',
+      });
+      const tx = mockTransaction();
+      tx.$queryRaw.mockResolvedValue([{ last_number: 3 }]);
+      tx.quote.create.mockResolvedValue({ id: UUID, quoteNumber: '003' });
+
+      await service.create(COMMERCIAL, {
+        partnerId: PARTNER_ID,
+        discountPercent: 10,
+        paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+        lines: [{ description: 'Item A', quantity: 2, unitPrice: 500 }],
+      });
+
+      expect(tx.quote.create).toHaveBeenCalledWith({
+        data: {
+          quoteNumber: '003',
+          partnerId: PARTNER_ID,
+          createdByUserId: USER_ID,
+          objet: null,
+          status: QuoteStatus.draft,
+          subtotal: new Prisma.Decimal('1000'),
+          discountPercent: new Prisma.Decimal('10.00'),
+          discountAmount: new Prisma.Decimal('100.00'),
+          tvaAmount: new Prisma.Decimal('171'),
+          totalAmount: new Prisma.Decimal('1071'),
+          paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+          lines: {
+            create: [
+              {
+                description: 'Item A',
+                unit: null,
+                quantity: new Prisma.Decimal('2'),
+                unitPrice: new Prisma.Decimal('500'),
+                lineTotal: new Prisma.Decimal('1000'),
               },
             ],
           },
@@ -469,6 +520,8 @@ describe('QuotesService', () => {
         data: {
           objet: 'Devis clim',
           subtotal: new Prisma.Decimal('300'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('57'),
           totalAmount: new Prisma.Decimal('357'),
           lines: {
@@ -562,8 +615,11 @@ describe('QuotesService', () => {
         status: QuoteStatus.accepted,
         convertedToInvoiceId: null,
         subtotal: new Prisma.Decimal('200'),
-        tvaAmount: new Prisma.Decimal('38'),
-        totalAmount: new Prisma.Decimal('238'),
+        discountPercent: new Prisma.Decimal('0.00'),
+        discountAmount: new Prisma.Decimal('0.00'),
+tvaAmount: new Prisma.Decimal('38'),
+          totalAmount: new Prisma.Decimal('238'),
+          paymentMethods: Prisma.DbNull,
         lines: [
           {
             id: 'l1',
@@ -593,8 +649,11 @@ describe('QuotesService', () => {
           objet: 'Devis clim',
           status: InvoiceStatus.draft,
           subtotal: new Prisma.Decimal('200'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('38'),
           totalAmount: new Prisma.Decimal('238'),
+          paymentMethods: Prisma.DbNull,
           quoteId: UUID,
           lines: {
             create: [

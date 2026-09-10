@@ -90,6 +90,8 @@ token definition itself.
 | `Button`       | `ui/Button.tsx`         | Variants `primary` \| `secondary` \| `danger` \| `ghost`; sizes `sm` \| `md`; supports `block` (full width) and `ref`. |
 | `Card`         | `ui/Card.tsx`           | Rounded surface container (`rounded-xl`, `border border-border`, `shadow-card`). |
 | `Input`        | `ui/Input.tsx`          | Text input within a styled label; supports `ref`. |
+| `Textarea`     | `ui/Textarea.tsx`       | Multi-line text input styled to match `Input`; slots in the same label pattern. |
+| `Combobox`     | `ui/Combobox.tsx`       | Free-text input with suggestions — `<input list>` + `<datalist>` (`options` prop), no selection lock-in; supports `ref`. |
 | `Select`       | `ui/Select.tsx`         | Dropdown select styled to match `Input`. |
 | `Badge`        | `ui/Badge.tsx`          | Small rounded counter (used on detail tabs). |
 | `Toast`        | `ui/Toast.tsx`          | Success status bar (`role="status"`, green). **Final name is `Toast`, not `SuccessBanner`.** |
@@ -110,7 +112,7 @@ Explicit behavior for each component across breakpoints:
 | `PageHeader` | **Vertical** — title on top, full-width action button below. | Vertical. | **Horizontal** — title at the reading start, action at the opposite end (respects current `dir`). |
 | `Modal` | **Full-screen** (no rounded corners, fills viewport). | Full-screen. | **Centered fixed-width** card (`max-w-md`/`max-w-2xl`). |
 | `Card` | Padding `p-4`/`p-6` via consumer class. | — | — |
-| `Input` / `Select` | `w-full` by default. | `w-full`; consumer may constrain (`sm:w-52`). | — |
+| `Input` / `Select` / `Textarea` / `Combobox` | `w-full` by default. | `w-full`; consumer may constrain (`sm:w-52`). | — |
 | `Badge` | Fixed small size (no responsive change). | — | — |
 | `Toast` | `w-full` within its container. | — | — |
 

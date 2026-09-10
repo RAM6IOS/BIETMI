@@ -15,8 +15,11 @@ interface QuoteResponse {
   status: string;
   objet: string | null;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: Array<{ label: string; percentage: number }> | null;
   convertedToInvoiceId: string | null;
   partner: { id: string; name: string; type: string };
   createdBy: { id: string; username: string; fullName: string };
@@ -33,6 +36,13 @@ interface InvoiceFromQuote {
   id: string;
   status: string;
   quoteId: string;
+  subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
+  tvaAmount: string;
+  totalAmount: string;
+  paymentMethods: Array<{ label: string; percentage: number }> | null;
+  lines: unknown[];
 }
 
 async function createUser(
@@ -173,8 +183,11 @@ describe('Quotes (e2e)', () => {
       expect(body.partner.type).toBe('customer');
       expect(body.createdBy.username).toBe('quote_admin');
       expect(body.subtotal).toBe('200.00');
+      expect(body.discountPercent).toBe('0.00');
+      expect(body.discountAmount).toBe('0.00');
       expect(body.tvaAmount).toBe('38.00');
       expect(body.totalAmount).toBe('238.00');
+      expect(body.paymentMethods).toBeNull();
       expect(body.lines).toHaveLength(1);
       expect(body.lines[0].quantity).toBe('2.000');
       expect(body.lines[0].unitPrice).toBe('100.000');
@@ -206,6 +219,33 @@ describe('Quotes (e2e)', () => {
       expect(body.subtotal).toBe('35.61');
       expect(body.tvaAmount).toBe('6.77');
       expect(body.totalAmount).toBe('42.38');
+    });
+
+    it('should apply a discount and compute TVA on the amount after discount', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/quotes')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          partnerId: customerId,
+          discountPercent: 10,
+          paymentMethods: [
+            { label: 'à la commande', percentage: 50 },
+            { label: 'solde à la livraison', percentage: 50 },
+          ],
+          lines: [{ description: 'Item A', quantity: 2, unitPrice: 500 }],
+        })
+        .expect(201);
+
+      const body = res.body as QuoteResponse;
+      expect(body.subtotal).toBe('1000.00');
+      expect(body.discountPercent).toBe('10.00');
+      expect(body.discountAmount).toBe('100.00');
+      expect(body.tvaAmount).toBe('171.00');
+      expect(body.totalAmount).toBe('1071.00');
+      expect(body.paymentMethods).toEqual([
+        { label: 'à la commande', percentage: 50 },
+        { label: 'solde à la livraison', percentage: 50 },
+      ]);
     });
 
     it('should reject a quote linked to a supplier', async () => {
@@ -489,8 +529,11 @@ describe('Quotes (e2e)', () => {
       expect(invoice.status).toBe('draft');
       expect(invoice.quoteId).toBe(quoteId);
       expect(invoice.subtotal).toBe('200.00');
+      expect(invoice.discountPercent).toBe('0.00');
+      expect(invoice.discountAmount).toBe('0.00');
       expect(invoice.tvaAmount).toBe('38.00');
       expect(invoice.totalAmount).toBe('238.00');
+      expect(invoice.paymentMethods).toBeNull();
       expect(invoice.lines).toHaveLength(1);
 
       const quote = await request(app.getHttpServer())
@@ -500,6 +543,50 @@ describe('Quotes (e2e)', () => {
       expect((quote.body as QuoteResponse).convertedToInvoiceId).toBe(
         invoice.id,
       );
+    });
+
+    it('should propagate discount and payment modalities to the invoice', async () => {
+      const created = (
+        await request(app.getHttpServer())
+          .post('/api/v1/quotes')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({
+            partnerId: customerId,
+            discountPercent: 10,
+            paymentMethods: [
+              { label: 'à la commande', percentage: 50 },
+              { label: 'solde à la livraison', percentage: 50 },
+            ],
+            lines: [{ description: 'Item A', quantity: 2, unitPrice: 500 }],
+          })
+          .expect(201)
+      ).body as QuoteResponse;
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${created.id}/send`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .patch(`/api/v1/quotes/${created.id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'accepted' })
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${created.id}/convert-to-invoice`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const invoice = res.body as InvoiceFromQuote;
+      expect(invoice.subtotal).toBe('1000.00');
+      expect(invoice.discountPercent).toBe('10.00');
+      expect(invoice.discountAmount).toBe('100.00');
+      expect(invoice.tvaAmount).toBe('171.00');
+      expect(invoice.totalAmount).toBe('1071.00');
+      expect(invoice.paymentMethods).toEqual([
+        { label: 'à la commande', percentage: 50 },
+        { label: 'solde à la livraison', percentage: 50 },
+      ]);
     });
 
     it('should be idempotent and return the existing invoice', async () => {

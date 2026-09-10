@@ -112,8 +112,11 @@ describe('InvoicesService', () => {
           objet: null,
           status: 'draft',
           subtotal: new Prisma.Decimal('250'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('47.5'),
           totalAmount: new Prisma.Decimal('297.5'),
+          paymentMethods: Prisma.DbNull,
           lines: {
             create: [
               {
@@ -129,6 +132,54 @@ describe('InvoicesService', () => {
                 quantity: new Prisma.Decimal('1'),
                 unitPrice: new Prisma.Decimal('50'),
                 lineTotal: new Prisma.Decimal('50'),
+              },
+            ],
+          },
+        },
+        include: INVOICE_INCLUDE,
+      });
+    });
+
+    it('should apply a discount and compute TVA on the amount after discount', async () => {
+      prisma.partner.findUnique.mockResolvedValue({
+        id: PARTNER_ID,
+        type: 'customer',
+      });
+      prisma.invoice.create.mockResolvedValue({ id: UUID, status: 'draft' });
+
+      // subtotal 1000, discount 10% -> discount 100, after 900,
+      // TVA 19% x 900 = 171, TTC = 1071
+      await service.create(COMMERCIAL, {
+        partnerId: PARTNER_ID,
+        issueDate: '2026-01-15',
+        discountPercent: 10,
+        paymentMethods: [{ label: 'Paiement à 30 jours', percentage: 100 }],
+        lines: [{ description: 'Item A', quantity: 2, unitPrice: 500 }],
+      });
+
+      expect(prisma.invoice.create).toHaveBeenCalledWith({
+        data: {
+          partnerId: PARTNER_ID,
+          createdByUserId: USER_ID,
+          issueDate: new Date('2026-01-15'),
+          dueDate: null,
+          internalReference: null,
+          objet: null,
+          status: 'draft',
+          subtotal: new Prisma.Decimal('1000'),
+          discountPercent: new Prisma.Decimal('10.00'),
+          discountAmount: new Prisma.Decimal('100.00'),
+          tvaAmount: new Prisma.Decimal('171'),
+          totalAmount: new Prisma.Decimal('1071'),
+          paymentMethods: [{ label: 'Paiement à 30 jours', percentage: 100 }],
+          lines: {
+            create: [
+              {
+                description: 'Item A',
+                unit: null,
+                quantity: new Prisma.Decimal('2'),
+                unitPrice: new Prisma.Decimal('500'),
+                lineTotal: new Prisma.Decimal('1000'),
               },
             ],
           },
@@ -200,8 +251,11 @@ describe('InvoicesService', () => {
           objet: null,
           status: 'draft',
           subtotal: new Prisma.Decimal('35.61'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('6.77'),
           totalAmount: new Prisma.Decimal('42.38'),
+          paymentMethods: Prisma.DbNull,
           lines: {
             create: [
               {
@@ -381,6 +435,8 @@ describe('InvoicesService', () => {
           dueDate: undefined,
           internalReference: undefined,
           subtotal: new Prisma.Decimal('300'),
+          discountPercent: new Prisma.Decimal('0.00'),
+          discountAmount: new Prisma.Decimal('0.00'),
           tvaAmount: new Prisma.Decimal('57'),
           totalAmount: new Prisma.Decimal('357'),
           lines: {

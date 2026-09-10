@@ -1,13 +1,13 @@
 import type { Company } from '../../api/company';
-import companyLogo from '../../assets/company-logo.png';
-import { isValidLogoSource } from '../../utils/companyLogo';
 import {
   formatAmountFR,
   formatDateFR,
   formatNumberFR,
+  formatPercentageFR,
   pad2,
 } from '../../utils/numberFormat';
 import { amountToFrenchWords } from '../../utils/amountToFrenchWords';
+import { CompanyHeader } from '../PurchaseOrders/CompanyHeader';
 
 export type DocumentMode = 'facture' | 'devis';
 
@@ -26,6 +26,11 @@ export interface PrintableContact {
   isPrimary?: boolean;
 }
 
+export interface PrintablePaymentMethod {
+  label: string;
+  percentage: number;
+}
+
 export interface PrintableDocumentProps {
   mode: DocumentMode;
   number: string | null;
@@ -38,8 +43,11 @@ export interface PrintableDocumentProps {
   createdByFullName?: string;
   objet?: string | null;
   subtotal: string;
+  discountPercent: string;
+  discountAmount: string;
   tvaAmount: string;
   totalAmount: string;
+  paymentMethods: PrintablePaymentMethod[];
   lines: PrintableDocumentLine[];
   company: Company | null;
 }
@@ -59,8 +67,11 @@ export function PrintableDocument({
   createdByFullName,
   objet,
   subtotal,
+  discountPercent,
+  discountAmount,
   tvaAmount,
   totalAmount,
+  paymentMethods,
   lines,
   company,
 }: PrintableDocumentProps) {
@@ -77,38 +88,27 @@ export function PrintableDocument({
       ? `DEVIS N° ${number ?? ''}`
       : `FACTURE N° ${number ?? ''}`;
 
-  const logo = company && isValidLogoSource(company.logoUrl) ? company.logoUrl : companyLogo;
+  const hasDiscount = Number(discountAmount) > 0;
+  const amountAfterDiscount = Math.max(
+    0,
+    Number(subtotal) - Number(discountAmount),
+  );
 
   return (
     <div dir="ltr" className="bg-white text-gray-900 font-serif flex min-h-[660px] flex-col">
-      <div className="flex items-start justify-between gap-6">
-        {company && (
-          <img
-            src={logo}
-            alt=""
-            className="h-16 w-16 object-contain"
-          />
-        )}
-        <div className="flex-1 text-center">
-          <h1 className="text-xl font-bold">{company?.name ?? ''}</h1>
-          {company?.siegeSocial && (
-            <p className="mt-1 text-xs">
-              Siège social : {company.siegeSocial}
-            </p>
-          )}
-          {(company?.mobile || company?.telFax) && (
-            <p className="mt-1 text-xs">
-              {company?.mobile && <>Mobile: {company.mobile} </>}
-              {company?.mobile && company?.telFax && '& '}
-              {company?.telFax && <>Tel/Fax : {company.telFax}</>}
-            </p>
-          )}
-        </div>
-        {/* spacer keeps the centered block visually centered when no logo */}
-        <div className="w-16" />
-      </div>
+      <CompanyHeader company={company} />
 
       <div className="mt-3 h-2 bg-success-600" />
+
+      <div className="mt-4 border-2 border-black p-3 text-sm">
+        <p className="font-bold">
+          {partnerLabel} :{' '}
+          <span className="font-normal">{partner.name ?? '—'}</span>
+        </p>
+        <p className="mt-1">Adresse : {partner.address ?? ''}</p>
+        <p className="mt-1">Mail : {contact?.email ?? ''}</p>
+        <p className="mt-1">Tel : {contact?.phone ?? ''}</p>
+      </div>
 
       <div className="mt-3 flex items-center justify-between text-sm">
         <p>
@@ -121,17 +121,7 @@ export function PrintableDocument({
         </p>
       </div>
 
-      <div className="mt-4 border-2 border-black p-3 text-sm">
-        <p className="font-bold">
-          {partnerLabel} :{' '}
-          <span className="font-normal">{partner.name ?? '—'}</span>
-        </p>
-        <p className="mt-1">Adresse : {partner.address ?? ''}</p>
-        <p className="mt-1">Mail : {contact?.email ?? ''}</p>
-        <p className="mt-1">Tel : {contact?.phone ?? ''}</p>
-      </div>
-
-      <div className="mt-7 text-center">
+      <div className="mt-5 text-center">
         <h2 className="text-2xl font-bold uppercase underline">{title}</h2>
         <p className="mt-4 font-semibold">
           Objet : <span className="font-semibold">{objet ?? ''}</span>
@@ -201,6 +191,24 @@ export function PrintableDocument({
             <span className="font-bold">MONTANT TOTAL</span>
             <span className="tabular-nums">{formatAmountFR(subtotal)}</span>
           </div>
+          {hasDiscount && (
+            <>
+              <div className="flex justify-between gap-8 border-b border-black px-3 py-2">
+                <span className="font-bold">
+                  REMISE ({formatPercentageFR(discountPercent)}%)
+                </span>
+                <span className="tabular-nums">
+                  {formatAmountFR(discountAmount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-8 border-b border-black px-3 py-2">
+                <span className="font-bold">MONTANT APRÈS REMISE</span>
+                <span className="tabular-nums">
+                  {formatAmountFR(String(amountAfterDiscount))}
+                </span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between gap-8 border-b border-black px-3 py-2">
             <span className="font-bold">TVA 19%</span>
             <span className="tabular-nums">{formatAmountFR(tvaAmount)}</span>
@@ -212,11 +220,23 @@ export function PrintableDocument({
         </div>
       </div>
 
-      <div className="mt-8 w-full lg:max-w-xl print:max-w-none">
+      <div className="mt-6 w-full lg:max-w-xl print:max-w-xl">
         <p className="text-sm italic underline">{closing}</p>
         <p className="mt-1 text-sm font-semibold leading-relaxed">
           {Number(totalAmount) > 0 ? amountToFrenchWords(Number(totalAmount)) : '—'}
         </p>
+        {paymentMethods.length > 0 && (
+          <>
+            <p className="mt-3 text-sm font-semibold">Modalités de paiement :</p>
+            <ul className="mt-1 space-y-0.5">
+              {paymentMethods.map((method, index) => (
+                <li key={index}>
+                  {formatPercentageFR(method.percentage)}% — {method.label}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
 
       <div className="mt-auto pt-12">

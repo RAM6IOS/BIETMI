@@ -4,6 +4,7 @@ import {
   formatAmountFR,
   formatDateFR,
   formatNumberFR,
+  formatPercentageFR,
   pad2,
 } from '../../utils/numberFormat';
 import { amountToFrenchWords } from '../../utils/amountToFrenchWords';
@@ -17,6 +18,11 @@ export function PurchaseOrderDocument({
   company: Company | null;
 }) {
   const lines = order.lines ?? [];
+  const hasDiscount = Number(order.discountAmount) > 0;
+  const amountAfterDiscount = Math.max(
+    0,
+    Number(order.subtotal) - Number(order.discountAmount),
+  );
 
   return (
     <div dir="ltr" className="bg-white text-gray-900">
@@ -112,6 +118,26 @@ export function PurchaseOrderDocument({
               {formatAmountFR(order.subtotal)}
             </span>
           </div>
+          {hasDiscount && (
+            <>
+              <div className="flex justify-between gap-8 py-2 text-sm border-b border-border">
+                <span className="text-text-secondary">
+                  Remise ({formatPercentageFR(order.discountPercent)}%)
+                </span>
+                <span className="tabular-nums">
+                  {formatAmountFR(order.discountAmount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-8 py-2 text-sm border-b border-border">
+                <span className="text-text-secondary">
+                  Montant après remise
+                </span>
+                <span className="tabular-nums">
+                  {formatAmountFR(String(amountAfterDiscount))}
+                </span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between gap-8 py-2 text-sm border-b border-border">
             <span className="text-text-secondary">TVA 19%</span>
             <span className="tabular-nums">
@@ -126,6 +152,21 @@ export function PurchaseOrderDocument({
           </div>
         </div>
       </div>
+
+      {(order.paymentMethods ?? []).length > 0 && (
+        <div className="mt-2 flex justify-end">
+          <div className="text-sm">
+            <span className="font-semibold">Modalités de paiement :</span>
+            <ul className="mt-1 space-y-0.5 text-right">
+              {(order.paymentMethods ?? []).map((method, index) => (
+                <li key={index}>
+                  {formatPercentageFR(method.percentage)}% — {method.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       <div className="mt-10 flex justify-end">
         <div className="w-64 py-14 text-center text-sm text-text-secondary">

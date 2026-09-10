@@ -7,7 +7,12 @@ import {
   updateInvoice,
   issueInvoice,
 } from '../../api/invoices';
-import type { Invoice, InvoiceInput, InvoiceLine } from '../../api/invoices';
+import type {
+  Invoice,
+  InvoiceInput,
+  InvoiceLine,
+  PaymentMethod,
+} from '../../api/invoices';
 import { listCustomers } from '../../api/customers';
 import type { Customer } from '../../api/customers';
 import { translateApiError } from '../../api/errors';
@@ -15,6 +20,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
+import { Combobox } from '../ui/Combobox';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { formatAmount } from './invoice-labels';
@@ -30,6 +36,8 @@ interface LineDraft {
 
 type PartnerOption = { id: string; name: string };
 
+const UNIT_OPTIONS = ['U', 'KG', 'M', 'M²', 'L'];
+
 const EMPTY_LINE: LineDraft = {
   description: '',
   unit: '',
@@ -41,7 +49,15 @@ function fixed2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function computeTotals(lines: LineDraft[]) {
+function parseDiscount(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0 || n > 100) return undefined;
+  return n;
+}
+
+function computeTotals(lines: LineDraft[], discountInput: string) {
   const lineTotals = lines.map((l) => {
     const qty = Number(l.quantity);
     const price = Number(l.unitPrice);
@@ -49,8 +65,17 @@ function computeTotals(lines: LineDraft[]) {
     return fixed2(raw);
   });
   const subtotal = fixed2(lineTotals.reduce((a, b) => a + b, 0));
-  const tvaAmount = fixed2(subtotal * 0.19);
-  return { subtotal, tvaAmount, totalAmount: fixed2(subtotal + tvaAmount) };
+  const pct = parseDiscount(discountInput) ?? 0;
+  const discountAmount = fixed2(subtotal * (pct / 100));
+  const amountAfterDiscount = fixed2(subtotal - discountAmount);
+  const tvaAmount = fixed2(amountAfterDiscount * 0.19);
+  return {
+    subtotal,
+    discountAmount,
+    amountAfterDiscount,
+    tvaAmount,
+    totalAmount: fixed2(amountAfterDiscount + tvaAmount),
+  };
 }
 
 function toLineDrafts(lines: InvoiceLine[] | undefined): LineDraft[] {
@@ -93,6 +118,8 @@ export function InvoiceFormPage() {
   const [dueDate, setDueDate] = useState('');
   const [internalReference, setInternalReference] = useState('');
   const [objet, setObjet] = useState('');
+  const [discountPercent, setDiscountPercent] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [lines, setLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
 
   const [partners, setPartners] = useState<PartnerOption[]>([]);
@@ -118,6 +145,12 @@ export function InvoiceFormPage() {
         setDueDate(inv.dueDate ? inv.dueDate.slice(0, 10) : '');
         setInternalReference(inv.internalReference ?? '');
         setObjet(inv.objet ?? '');
+        setDiscountPercent(
+          inv.discountPercent && Number(inv.discountPercent) > 0
+            ? String(Number(inv.discountPercent))
+            : '',
+        );
+        setPaymentMethods(inv.paymentMethods ?? []);
         setLines(toLineDrafts(inv.lines));
       })
       .catch((err) => {
@@ -174,7 +207,24 @@ export function InvoiceFormPage() {
     );
   };
 
-  const totals = computeTotals(lines);
+  const updatePaymentMethod = (
+    index: number,
+    patch: Partial<PaymentMethod>,
+  ) => {
+    setPaymentMethods((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+    );
+  };
+
+  const addPaymentMethod = () => {
+    setPaymentMethods((prev) => [...prev, { label: '', percentage: 0 }]);
+  };
+
+  const removePaymentMethod = (index: number) => {
+    setPaymentMethods((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const totals = computeTotals(lines, discountPercent);
 
   const buildInput = (): InvoiceInput => ({
     partnerId,
@@ -182,6 +232,11 @@ export function InvoiceFormPage() {
     dueDate: dueDate || undefined,
     internalReference: internalReference.trim() || undefined,
     objet: objet.trim() || undefined,
+    discountPercent: parseDiscount(discountPercent),
+    paymentMethods:
+      paymentMethods
+        .map((m) => ({ label: m.label.trim(), percentage: Number(m.percentage) }))
+        .filter((m) => m.label && Number.isFinite(m.percentage)) || undefined,
     lines: lines
       .filter(isValidLine)
       .map((l) => ({
@@ -390,6 +445,94 @@ export function InvoiceFormPage() {
               className="mt-1"
             />
           </div>
+
+          <div>
+            <label
+              htmlFor="invoice-discount"
+              className="block text-sm font-medium text-gray-700"
+            >
+              {t('invoices:discount')}
+            </label>
+            <Input
+              id="invoice-discount"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              inputMode="decimal"
+              value={discountPercent}
+              onChange={(e) => setDiscountPercent(e.target.value)}
+              placeholder={t('invoices:discountPlaceholder')}
+              className="mt-1"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <h3 className="text-sm font-medium text-gray-700">
+              {t('invoices:paymentMethods')}
+            </h3>
+            <div className="mt-2">
+              <Button variant="ghost" size="sm" onClick={addPaymentMethod}>
+                {t('invoices:addPaymentMethod')}
+              </Button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {paymentMethods.length === 0 && (
+                <p className="text-xs text-text-secondary">
+                  {t('invoices:paymentMethodsEmpty')}
+                </p>
+              )}
+              {paymentMethods.map((method, index) => (
+                <div key={index} className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`invoice-payment-label-${index}`}
+                      className="block text-xs font-medium text-text-secondary mb-1"
+                    >
+                      {t('invoices:paymentMethodLabel')}
+                    </label>
+                    <Input
+                      id={`invoice-payment-label-${index}`}
+                      type="text"
+                      value={method.label}
+                      onChange={(e) =>
+                        updatePaymentMethod(index, { label: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label
+                      htmlFor={`invoice-payment-pct-${index}`}
+                      className="block text-xs font-medium text-text-secondary mb-1"
+                    >
+                      {t('invoices:paymentMethodPercentage')}
+                    </label>
+                    <Input
+                      id={`invoice-payment-pct-${index}`}
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={method.percentage === 0 ? '' : String(method.percentage)}
+                      onChange={(e) =>
+                        updatePaymentMethod(index, {
+                          percentage: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mb-1"
+                    onClick={() => removePaymentMethod(index)}
+                    aria-label={t('invoices:removePaymentMethod', { n: index + 1 })}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="mt-8">
@@ -427,9 +570,9 @@ export function InvoiceFormPage() {
                   >
                     {t('invoices:unit')}
                   </label>
-                  <Input
+                  <Combobox
                     id={`line-unit-${index}`}
-                    type="text"
+                    options={UNIT_OPTIONS}
                     value={line.unit}
                     onChange={(e) => updateLine(index, { unit: e.target.value })}
                     placeholder={t('invoices:unitPlaceholder')}
@@ -501,6 +644,18 @@ export function InvoiceFormPage() {
               <span className="text-text-secondary">{t('invoices:subtotal')}</span>
               <span className="text-gray-900">{formatAmount(String(totals.subtotal))}</span>
             </div>
+            {totals.discountAmount > 0 && (
+              <div className="flex justify-between gap-8 text-sm">
+                <span className="text-text-secondary">
+                  {t('invoices:remise', {
+                    pct: parseDiscount(discountPercent) ?? 0,
+                  })}
+                </span>
+                <span className="text-gray-900">
+                  {formatAmount(String(totals.discountAmount))}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between gap-8 text-sm">
               <span className="text-text-secondary">{t('invoices:tax19')}</span>
               <span className="text-gray-900">{formatAmount(String(totals.tvaAmount))}</span>

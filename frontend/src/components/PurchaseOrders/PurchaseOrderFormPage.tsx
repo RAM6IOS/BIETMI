@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { createPurchaseOrder } from '../../api/purchaseOrders';
 import type { PurchaseOrderInput } from '../../api/purchaseOrders';
+import type { PaymentMethod } from '../../api/invoices';
 import { listSuppliers } from '../../api/suppliers';
 import type { Supplier } from '../../api/suppliers';
 import { translateApiError } from '../../api/errors';
@@ -10,6 +11,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
+import { Combobox } from '../ui/Combobox';
 import { formatAmountFR, pad2 } from '../../utils/numberFormat';
 import { amountToFrenchWords } from '../../utils/amountToFrenchWords';
 import { useCompany } from '../../hooks/useCompany';
@@ -24,6 +26,8 @@ interface LineDraft {
 
 type SupplierOption = { id: string; name: string };
 
+const UNIT_OPTIONS = ['U', 'KG', 'M', 'M²', 'L'];
+
 const EMPTY_LINE: LineDraft = {
   description: '',
   unit: '',
@@ -35,7 +39,15 @@ function fixed2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function computeTotals(lines: LineDraft[]) {
+function parseDiscount(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0 || n > 100) return undefined;
+  return n;
+}
+
+function computeTotals(lines: LineDraft[], discountInput: string) {
   const lineTotals = lines.map((l) => {
     const qty = Number(l.quantity);
     const price = Number(l.unitPrice);
@@ -43,8 +55,17 @@ function computeTotals(lines: LineDraft[]) {
     return fixed2(raw);
   });
   const subtotal = fixed2(lineTotals.reduce((a, b) => a + b, 0));
-  const tvaAmount = fixed2(subtotal * 0.19);
-  return { subtotal, tvaAmount, totalAmount: fixed2(subtotal + tvaAmount) };
+  const pct = parseDiscount(discountInput) ?? 0;
+  const discountAmount = fixed2(subtotal * (pct / 100));
+  const amountAfterDiscount = fixed2(subtotal - discountAmount);
+  const tvaAmount = fixed2(amountAfterDiscount * 0.19);
+  return {
+    subtotal,
+    discountAmount,
+    amountAfterDiscount,
+    tvaAmount,
+    totalAmount: fixed2(amountAfterDiscount + tvaAmount),
+  };
 }
 
 function lineAmount(line: LineDraft): string {
@@ -76,6 +97,8 @@ export function PurchaseOrderFormPage() {
 
   const [supplierId, setSupplierId] = useState('');
   const [orderDate, setOrderDate] = useState(() => todayInputValue());
+  const [discountPercent, setDiscountPercent] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [lines, setLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
 
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
@@ -124,11 +147,33 @@ export function PurchaseOrderFormPage() {
     );
   };
 
-  const totals = computeTotals(lines);
+  const updatePaymentMethod = (
+    index: number,
+    patch: Partial<PaymentMethod>,
+  ) => {
+    setPaymentMethods((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, ...patch } : m)),
+    );
+  };
+
+  const addPaymentMethod = () => {
+    setPaymentMethods((prev) => [...prev, { label: '', percentage: 0 }]);
+  };
+
+  const removePaymentMethod = (index: number) => {
+    setPaymentMethods((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const totals = computeTotals(lines, discountPercent);
 
   const buildInput = (): PurchaseOrderInput => ({
     supplierId,
     orderDate,
+    discountPercent: parseDiscount(discountPercent),
+    paymentMethods:
+      paymentMethods
+        .map((m) => ({ label: m.label.trim(), percentage: Number(m.percentage) }))
+        .filter((m) => m.label && Number.isFinite(m.percentage)) || undefined,
     lines: lines
       .filter(isValidLine)
       .map((l) => ({
@@ -241,6 +286,82 @@ export function PurchaseOrderFormPage() {
             </div>
           </div>
 
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 border border-border">
+            <div className="sm:border-r border-border px-3 py-2">
+              <label
+                htmlFor="po-discount"
+                className="block text-xs text-text-secondary"
+              >
+                Remise (%) :
+              </label>
+              <Input
+                id="po-discount"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                inputMode="decimal"
+                value={discountPercent}
+                onChange={(e) => setDiscountPercent(e.target.value)}
+                placeholder="0"
+                className="mt-0.5"
+              />
+            </div>
+            <div className="border-t sm:border-t-0 sm:border-l border-border px-3 py-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label
+                  htmlFor="po-payment-label-0"
+                  className="block text-xs text-text-secondary"
+                >
+                  Modalités de paiement :
+                </label>
+                <Button variant="ghost" size="sm" onClick={addPaymentMethod}>
+                  + Ajouter
+                </Button>
+              </div>
+              {paymentMethods.length === 0 && (
+                <p className="text-xs text-text-secondary mt-1">—</p>
+              )}
+              <div className="mt-1 space-y-1.5">
+                {paymentMethods.map((method, index) => (
+                  <div key={index} className="flex items-end gap-1.5">
+                    <Input
+                      id={`po-payment-label-${index}`}
+                      type="text"
+                      value={method.label}
+                      placeholder="Libellé"
+                      onChange={(e) =>
+                        updatePaymentMethod(index, { label: e.target.value })
+                      }
+                    />
+                    <Input
+                      id={`po-payment-pct-${index}`}
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={method.percentage === 0 ? '' : String(method.percentage)}
+                      placeholder="%"
+                      className="w-16"
+                      onChange={(e) =>
+                        updatePaymentMethod(index, {
+                          percentage: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removePaymentMethod(index)}
+                      aria-label={`Supprimer la modalité ${index + 1}`}
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="mt-6 overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
@@ -283,9 +404,9 @@ export function PurchaseOrderFormPage() {
                       <label htmlFor={`po-line-unit-${index}`} className="sr-only">
                         Unité {index + 1}
                       </label>
-                      <Input
+                      <Combobox
                         id={`po-line-unit-${index}`}
-                        type="text"
+                        options={UNIT_OPTIONS}
                         value={line.unit}
                         onChange={(e) =>
                           updateLine(index, { unit: e.target.value })
@@ -370,6 +491,16 @@ export function PurchaseOrderFormPage() {
                   {formatAmountFR(String(totals.subtotal))}
                 </span>
               </div>
+              {totals.discountAmount > 0 && (
+                <div className="flex justify-between gap-8 py-2 text-sm border-b border-border">
+                  <span className="text-text-secondary">
+                    Remise ({parseDiscount(discountPercent) ?? 0}%)
+                  </span>
+                  <span className="text-gray-900 tabular-nums">
+                    {formatAmountFR(String(totals.discountAmount))}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between gap-8 py-2 text-sm border-b border-border">
                 <span className="text-text-secondary">TVA 19%</span>
                 <span className="text-gray-900 tabular-nums">

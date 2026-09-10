@@ -18,8 +18,14 @@ export function InvoiceDocument({
       createdByFullName={invoice.createdBy?.fullName}
       objet={invoice.objet}
       subtotal={invoice.subtotal}
+      discountPercent={invoice.discountPercent}
+      discountAmount={invoice.discountAmount}
       tvaAmount={invoice.tvaAmount}
       totalAmount={invoice.totalAmount}
+      paymentMethods={(invoice.paymentMethods ?? []).map((m) => ({
+        label: m.label,
+        percentage: Number(m.percentage),
+      }))}
       lines={invoice.lines ?? []}
       company={company}
     />
