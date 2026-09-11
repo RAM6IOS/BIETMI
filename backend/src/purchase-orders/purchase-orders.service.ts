@@ -87,7 +87,7 @@ export class PurchaseOrdersService {
           tvaAmount,
           totalAmount,
           paymentMethods:
-        normalizePaymentMethods(dto.paymentMethods) ?? Prisma.DbNull,
+            normalizePaymentMethods(dto.paymentMethods) ?? Prisma.DbNull,
           lines: {
             create: computed.map((line) => ({
               description: line.description,

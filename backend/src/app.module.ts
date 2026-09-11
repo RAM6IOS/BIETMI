@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { PartnersModule } from './partners/partners.module';
+import { SupplierCategoriesModule } from './partners/supplier-categories/supplier-categories.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { QuotesModule } from './quotes/quotes.module';
@@ -13,6 +14,7 @@ import { UsersModule } from './users/users.module';
   imports: [
     AuthModule,
     PartnersModule,
+    SupplierCategoriesModule,
     InvoicesModule,
     PurchaseOrdersModule,
     QuotesModule,

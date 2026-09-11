@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsNumber, IsString, IsNotEmpty, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsNumber,
+  IsString,
+  IsNotEmpty,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class PaymentMethodDto {
   @IsString()

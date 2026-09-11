@@ -70,6 +70,7 @@ export function Sidebar({
           {isAdmin && (
             <>
               <SidebarLink to="/users" onNavigate={onNavigate}>{t('layout:users')}</SidebarLink>
+              <SidebarLink to="/settings/supplier-categories" onNavigate={onNavigate}>{t('layout:supplierCategories')}</SidebarLink>
               <SidebarLink to="/settings/company" onNavigate={onNavigate}>{t('layout:companySettings')}</SidebarLink>
             </>
           )}

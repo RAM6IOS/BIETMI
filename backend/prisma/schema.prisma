@@ -63,8 +63,19 @@ model Partner {
   invoices  Invoice[]
   purchaseOrders PurchaseOrder[]
   quotes Quote[]
+  categories SupplierCategory[]
 
   @@map("partners")
+}
+
+model SupplierCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  partners Partner[]
+
+  @@map("supplier_categories")
 }
 
 model Contact {

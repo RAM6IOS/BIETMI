@@ -207,6 +207,23 @@ export function SupplierDetailPage() {
                 <p className="text-sm text-text-secondary mb-1">{t('suppliers:address')}</p>
                 <p className="text-gray-900">{supplier.address ?? '—'}</p>
               </div>
+              {supplier.categories && supplier.categories.length > 0 && (
+                <div className="sm:col-span-2">
+                  <p className="text-sm text-text-secondary mb-1">
+                    {t('supplierCategories:categories')}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {supplier.categories.map((c) => (
+                      <Badge
+                        key={c.id}
+                        className="bg-primary-50 text-primary-700"
+                      >
+                        {c.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               {otherContacts.length > 0 && (
                 <div className="sm:col-span-2">
                   <p className="text-sm text-text-secondary mb-1">

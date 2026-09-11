@@ -8,6 +8,7 @@ export const NAMESPACES = [
   'auth',
   'customers',
   'suppliers',
+  'supplierCategories',
   'invoices',
   'quotes',
   'purchaseOrders',
@@ -39,13 +40,12 @@ export function setLanguage(lang: Lang) {
 }
 
 const namespaced = (
-  source: typeof ar,
+  source: unknown,
 ): Record<string, Record<string, unknown>> => {
   const out: Record<string, Record<string, unknown>> = {};
+  const bundle = source as Record<string, Record<string, unknown>>;
   for (const ns of NAMESPACES) {
-    out[ns] = (source as unknown as Record<string, Record<string, unknown>>)[
-      ns
-    ] ?? {};
+    out[ns] = bundle[ns] ?? {};
   }
   return out;
 };

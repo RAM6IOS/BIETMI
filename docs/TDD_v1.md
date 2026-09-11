@@ -146,9 +146,26 @@ id (PK), username (unique), passwordHash, role (enum: admin/commercial/purchasin
 Partner (1) ──< (N) Contact
 Partner (1) ──< (N) Invoice ──< (N) InvoiceLine
 Partner (1) ──< (N) Contract
+Partner (N) ──< (M) SupplierCategory   [جدول ربط ضمني `_PartnerToSupplierCategory` — خاص بالموردين]
 User    (1) ──< (N) Invoice   [createdByUserId]
 User    (1) ──< (N) Contract  [createdByUserId]
 ```
+
+### 5.7 SupplierCategory (تصنيفات الموردين) — علاقة Many-to-Many
+
+قرار محسوم: التصنيفات كيان مستقل **`SupplierCategory`** مع علاقة **Many-to-Many** إلى `Partner` (عبر جدول ربط ضمني لـ Prisma `_PartnerToSupplierCategory`)، لأن المورد الواحد ينتمي لأكثر من تصنيف (استيراد، قطع غيار، خدمات) والتصنيف الواحد يضم عدّة موردين. نقطة الوصول: `/supplier-categories`.
+
+| الحقل | النوع | ملاحظة |
+|---|---|---|
+| id | UUID (PK) | |
+| name | string, unique | اسم التصنيف — فريد لمنع التكرار |
+| createdAt | datetime | |
+
+**قواعد العمل**:
+- `POST/PATCH/DELETE /supplier-categories` متاحة لصلاحية `admin` فقط؛ `GET` مفتوحة لجميع الأدوار (تُستخدم في قوائم الفلترة).
+- `DELETE` يُرفض بحالة **409** إذا كان التصنيف مرتبطاً بأي مورد.
+- عرض/تعديل المورد (`POST/PATCH /suppliers`) يقبل `categoryIds: string[]` ويستبدل الارتباط كلياً عند تمريره (`set`).
+- فلترة قائمة الموردين عبر `GET /suppliers?categoryId=<uuid>` بمنطق **ANY/OR**: قيم مفصولة بفواصل (`categoryId=a,b`) ترجع الموردين المنتمين لأي تصنيف منها — لا يشترط تطابق كل التصنيفات.
 
 ## 6. سياسة العمل مع وكيل الذكاء الاصطناعي في كتابة الكود
 
@@ -213,6 +230,7 @@ User    (1) ──< (N) Contract  [createdByUserId]
 | 8 | نموذج Partner موحّد (وليس Customer/Supplier منفصلين) — موثَّق بالتفصيل في القسم 5. Sprint 1 انحرف عن هذا لغياب هذا القسم من نسخة سابقة من الوثيقة؛ صُحِّح في Sprint 2. | معتمد — مُصحَّح |
 | 9 | جهات الاتصال (Contact) جدول علائقي منفصل يدعم عدة جهات اتصال لكل Partner — وليس حقلاً واحداً `contactPerson` كما في المخطط المفاهيمي المبسَّط الأول. أدق لواقع عمل BIETMI (عملاء/موردون كبار بعدة جهات اتصال). | معتمد |
 | 10 | REQ-503/504 (إدارة المستخدمين: إنشاء حسابات من طرف المدير فقط، إلزام تغيير كلمة المرور المؤقتة عند أول دخول) — اكتُشفت كفجوة في SRS الأصلي أثناء تصميم الشاشات، ويجب إضافتها رسمياً لوثيقة SRS. | معتمد — بانتظار تحديث SRS_v1.md |
+| 11 | تصنيفات الموردين (`SupplierCategory`) كيان مستقل + علاقة Many-to-Many مع `Partner` (جدول ربط ضمني) — قرار محسوم، موثَّق بالقسم 5.7. | معتمد |
 
 ## 9. الوثائق المرجعية المرتبطة
 

@@ -4,6 +4,7 @@ import {
   IsArray,
   IsEnum,
   ValidateNested,
+  IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PartnerCurrency } from '@prisma/client';
@@ -38,4 +39,9 @@ export class CreatePartnerDto {
   @Type(() => CreateContactDto)
   @IsOptional()
   contacts?: CreateContactDto[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  categoryIds?: string[];
 }

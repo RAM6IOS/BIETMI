@@ -93,6 +93,7 @@ token definition itself.
 | `Textarea`     | `ui/Textarea.tsx`       | Multi-line text input styled to match `Input`; slots in the same label pattern. |
 | `Combobox`     | `ui/Combobox.tsx`       | Free-text input with suggestions — `<input list>` + `<datalist>` (`options` prop), no selection lock-in; supports `ref`. |
 | `Select`       | `ui/Select.tsx`         | Dropdown select styled to match `Input`. |
+| `MultiSelect`  | `ui/MultiSelect.tsx`    | Multi-select: toggle button opens a checkbox list (`options: {value,label}[]`); selected items shown as removable chips; optional `extra` slot (e.g. inline "create new" input). Native checkboxes for accessibility. |
 | `Badge`        | `ui/Badge.tsx`          | Small rounded counter (used on detail tabs). |
 | `Toast`        | `ui/Toast.tsx`          | Success status bar (`role="status"`, green). **Final name is `Toast`, not `SuccessBanner`.** |
 | `Spinner`      | `ui/Spinner.tsx`        | Loading indicator with `role="status"`. |

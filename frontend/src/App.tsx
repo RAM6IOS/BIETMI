@@ -19,6 +19,7 @@ import { PurchaseOrderFormPage } from './components/PurchaseOrders/PurchaseOrder
 import { PurchaseOrderDetailPage } from './components/PurchaseOrders/PurchaseOrderDetailPage';
 import { CompanySettingsPage } from './components/Settings/CompanySettingsPage';
 import { UsersPage } from './components/Users/UsersPage';
+import { SupplierCategoriesPage } from './components/SupplierCategories/SupplierCategoriesPage';
 import { ChangePasswordPage } from './components/Auth/ChangePasswordPage';
 import { ForgotPasswordPage } from './components/Auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './components/Auth/ResetPasswordPage';
@@ -121,6 +122,7 @@ function DashboardLayout() {
               <Route path="/purchase-orders/new" element={<PurchaseOrderFormPage />} />
               <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
               <Route path="/users" element={<UsersPage />} />
+              <Route path="/settings/supplier-categories" element={<SupplierCategoriesPage />} />
               <Route path="/settings/company" element={<CompanySettingsPage />} />
               <Route path="/change-password" element={<ChangePasswordPage />} />
             </Routes>

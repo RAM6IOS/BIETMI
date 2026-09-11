@@ -28,5 +28,5 @@ export function normalizePaymentMethods(
     });
   }
 
-  return normalized.length > 0 ? (normalized as Prisma.InputJsonValue) : null;
+  return normalized.length > 0 ? normalized : null;
 }

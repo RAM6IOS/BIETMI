@@ -617,9 +617,9 @@ describe('QuotesService', () => {
         subtotal: new Prisma.Decimal('200'),
         discountPercent: new Prisma.Decimal('0.00'),
         discountAmount: new Prisma.Decimal('0.00'),
-tvaAmount: new Prisma.Decimal('38'),
-          totalAmount: new Prisma.Decimal('238'),
-          paymentMethods: Prisma.DbNull,
+        tvaAmount: new Prisma.Decimal('38'),
+        totalAmount: new Prisma.Decimal('238'),
+        paymentMethods: Prisma.DbNull,
         lines: [
           {
             id: 'l1',

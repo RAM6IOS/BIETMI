@@ -79,6 +79,22 @@ export function SupplierTable({
       ),
     },
     {
+      key: 'categories',
+      header: t('supplierCategories:categories'),
+      render: (s) =>
+        s.categories && s.categories.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {s.categories.map((c) => (
+              <Badge key={c.id} className="bg-primary-50 text-primary-700">
+                {c.name}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-gray-400">—</span>
+        ),
+    },
+    {
       key: 'phone',
       header: t('suppliers:phone'),
       render: (s) => <span className="text-gray-500">{getPrimaryPhone(s)}</span>,

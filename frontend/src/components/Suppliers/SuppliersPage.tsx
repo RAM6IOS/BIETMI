@@ -9,6 +9,8 @@ import {
   deleteSupplier,
 } from '../../api/suppliers';
 import type { Supplier, SupplierInput } from '../../api/suppliers';
+import { listSupplierCategories } from '../../api/supplierCategories';
+import type { SupplierCategory } from '../../api/supplierCategories';
 import { translateApiError } from '../../api/errors';
 import { SupplierTable } from './SupplierTable';
 import type { SortField, SortOrder } from './SupplierTable';
@@ -56,6 +58,8 @@ export function SuppliersPage() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('createdAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [categories, setCategories] = useState<SupplierCategory[]>([]);
+  const [categoryId, setCategoryId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
@@ -75,6 +79,7 @@ export function SuppliersPage() {
       sortOrder,
       page,
       limit: PAGE_SIZE,
+      categoryId: categoryId || undefined,
     })
       .then((result) => {
         if (cancelled) return;
@@ -92,7 +97,21 @@ export function SuppliersPage() {
     return () => {
       cancelled = true;
     };
-  }, [search, sortBy, sortOrder, page]);
+  }, [search, sortBy, sortOrder, page, categoryId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSupplierCategories()
+      .then((result) => {
+        if (!cancelled) setCategories(result);
+      })
+      .catch(() => {
+        // filter is optional; ignore failures
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const timer = successTimer.current;
@@ -106,6 +125,7 @@ export function SuppliersPage() {
     sortByValue?: SortField;
     sortOrderValue?: SortOrder;
     pageValue?: number;
+    categoryIdValue?: string;
   } = {}) => {
     setIsLoading(true);
     setError('');
@@ -116,6 +136,7 @@ export function SuppliersPage() {
         sortOrder: opts.sortOrderValue ?? sortOrder,
         page: opts.pageValue ?? page,
         limit: PAGE_SIZE,
+        categoryId: (opts.categoryIdValue ?? categoryId) || undefined,
       });
       setSuppliers(result.data);
       setTotal(result.meta.total);
@@ -136,6 +157,11 @@ export function SuppliersPage() {
     if (!option) return;
     setSortBy(option.sortBy);
     setSortOrder(option.sortOrder);
+    setPage(1);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryId(value);
     setPage(1);
   };
 
@@ -250,6 +276,20 @@ export function SuppliersPage() {
             {SORT_OPTIONS.map((o) => (
               <option key={o.label} value={o.label}>
                 {o.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            id="supplier-category-filter"
+            value={categoryId}
+            onChange={(e) => handleCategoryChange(e.target.value)}
+            className="sm:w-52"
+            aria-label={t('suppliers:categoryFilter')}
+          >
+            <option value="">{t('suppliers:allCategories')}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </Select>

@@ -80,6 +80,7 @@ describe('PartnersService', () => {
           paymentTerms: '60 يوم',
           type: 'supplier',
           currency: 'FOREIGN',
+          categories: undefined,
           contacts: {
             create: [
               {
@@ -92,36 +93,9 @@ describe('PartnersService', () => {
             ],
           },
         },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
       });
     });
 
@@ -137,38 +111,12 @@ describe('PartnersService', () => {
           name: 'Cevital',
           type: 'customer',
           currency: 'DZD',
+          categories: undefined,
           contacts: undefined,
         },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
       });
     });
   });
@@ -189,36 +137,9 @@ describe('PartnersService', () => {
       });
       expect(prisma.partner.findMany).toHaveBeenCalledWith({
         where: { type: 'supplier', isActive: true },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
         orderBy: { createdAt: 'desc' },
         skip: 0,
         take: 20,
@@ -246,36 +167,9 @@ describe('PartnersService', () => {
             },
           ],
         },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
         orderBy: { createdAt: 'desc' },
         skip: 0,
         take: 20,
@@ -292,36 +186,9 @@ describe('PartnersService', () => {
       expect(result).toEqual({ id: UUID });
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
         where: { id: UUID, type: 'supplier' },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
       });
     });
 
@@ -345,36 +212,9 @@ describe('PartnersService', () => {
 
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
         where: { id: UUID, type: 'supplier' },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
       });
     });
 
@@ -385,36 +225,9 @@ describe('PartnersService', () => {
 
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
         where: { id: UUID, type: 'customer' },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
       });
     });
   });
@@ -436,37 +249,12 @@ describe('PartnersService', () => {
         data: {
           paymentTerms: '30 يوم',
           currency: 'FOREIGN',
+          contacts: undefined,
+          categories: undefined,
         },
-        include: {
-          contacts: true,
-          invoices: {
-            select: {
-              id: true,
-              invoiceNumber: true,
-              issueDate: true,
-              dueDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { issueDate: 'desc' },
-          },
-          purchaseOrders: {
-            select: {
-              id: true,
-              orderNumber: true,
-              orderDate: true,
-              status: true,
-              subtotal: true,
-              tvaAmount: true,
-              totalAmount: true,
-              createdAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
       });
     });
 
@@ -503,6 +291,154 @@ describe('PartnersService', () => {
       await expect(
         service.remove('nonexistent', PartnerType.supplier),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('categories', () => {
+    const CAT_UUID = 'd4e5f6a7-b8c9-0123-def0-123456789012';
+
+    it('create with categoryIds connects categories', async () => {
+      const dto = {
+        name: 'DEMAG',
+        categoryIds: [UUID, CAT_UUID],
+      };
+
+      prisma.partner.create.mockResolvedValue({
+        id: UUID3,
+        name: 'DEMAG',
+        categories: [
+          { id: UUID, name: 'قطع غيار' },
+          { id: CAT_UUID, name: 'مواد خام' },
+        ],
+      });
+
+      const result = await service.create(dto, PartnerType.supplier);
+
+      expect(result).toBeDefined();
+      expect(prisma.partner.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'DEMAG',
+          categories: {
+            connect: [{ id: UUID }, { id: CAT_UUID }],
+          },
+        }),
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
+      });
+    });
+
+    it('create without categoryIds works', async () => {
+      const dto = { name: 'Cevital' };
+
+      prisma.partner.create.mockResolvedValue({
+        id: UUID3,
+        name: 'Cevital',
+      });
+
+      await service.create(dto, PartnerType.supplier);
+
+      expect(prisma.partner.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Cevital',
+          categories: undefined,
+        }),
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
+      });
+    });
+
+    it('update with categoryIds replaces categories', async () => {
+      prisma.partner.findUnique.mockResolvedValue({ id: UUID });
+      prisma.partner.update.mockResolvedValue({ id: UUID });
+
+      await service.update(
+        UUID,
+        { categoryIds: [CAT_UUID] },
+        PartnerType.supplier,
+      );
+
+      expect(prisma.partner.update).toHaveBeenCalledWith({
+        where: { id: UUID },
+        data: expect.objectContaining({
+          categories: {
+            set: [{ id: CAT_UUID }],
+          },
+        }),
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
+      });
+    });
+
+    it('update without categoryIds does not touch categories', async () => {
+      prisma.partner.findUnique.mockResolvedValue({ id: UUID });
+      prisma.partner.update.mockResolvedValue({ id: UUID });
+
+      await service.update(UUID, { name: 'X' }, PartnerType.supplier);
+
+      expect(prisma.partner.update).toHaveBeenCalledWith({
+        where: { id: UUID },
+        data: expect.objectContaining({
+          categories: undefined,
+        }),
+        include: expect.objectContaining({
+          categories: { select: { id: true, name: true } },
+        }),
+      });
+    });
+
+    it('findAll with categoryId filters suppliers', async () => {
+      prisma.partner.findMany.mockResolvedValue([]);
+      prisma.partner.count.mockResolvedValue(0);
+
+      await service.findAll(
+        { categoryId: UUID, page: '1', limit: '20' },
+        PartnerType.supplier,
+      );
+
+      expect(prisma.partner.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            categories: { some: { id: UUID } },
+          }),
+        }),
+      );
+    });
+
+    it('findAll with multiple comma-separated categoryIds creates OR filter', async () => {
+      prisma.partner.findMany.mockResolvedValue([]);
+      prisma.partner.count.mockResolvedValue(0);
+
+      await service.findAll(
+        { categoryId: `${UUID},${CAT_UUID}`, page: '1', limit: '20' },
+        PartnerType.supplier,
+      );
+
+      expect(prisma.partner.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            categories: {
+              some: { id: { in: [UUID, CAT_UUID] } },
+            },
+          }),
+        }),
+      );
+    });
+
+    it('findOne includes categories', async () => {
+      prisma.partner.findUnique.mockResolvedValue({ id: UUID });
+
+      await service.findOne(UUID, PartnerType.supplier);
+
+      expect(prisma.partner.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            categories: { select: { id: true, name: true } },
+          }),
+        }),
+      );
     });
   });
 });

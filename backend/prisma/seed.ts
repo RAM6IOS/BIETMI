@@ -50,6 +50,17 @@ async function main() {
   console.log(`✅ Created admin_bietmi user: ${adminBietmiUser.username}`);
   console.log(`🔑 Password: ${adminPassword}`);
 
+  // Base supplier categories (idempotent — safe to re-run)
+  const seedCategories = ['حديد', 'معدات', 'قطع غيار', 'مواد استهلاكية'];
+  for (const name of seedCategories) {
+    const category = await prisma.supplierCategory.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+    console.log(`✅ Supplier category ensured: ${category.name}`);
+  }
+
   console.log('\n🎉 Seeding complete!');
 
   if (!process.env.ADMIN_PASSWORD) {

@@ -38,6 +38,7 @@ const INVOICE_SELECT = {
 
 const PARTNER_INCLUDE = {
   contacts: true,
+  categories: { select: { id: true, name: true } },
   invoices: {
     select: INVOICE_SELECT,
     orderBy: { issueDate: 'desc' as const },
@@ -72,7 +73,8 @@ export class PartnersService {
   }
 
   async create(createPartnerDto: CreatePartnerDto, type: PartnerType) {
-    const { contacts, currency, ...partnerData } = createPartnerDto;
+    const { contacts, currency, categoryIds, ...partnerData } =
+      createPartnerDto;
 
     try {
       return await this.prisma.partner.create({
@@ -90,6 +92,9 @@ export class PartnersService {
                   isPrimary: contact.isPrimary ?? false,
                 })),
               }
+            : undefined,
+          categories: categoryIds
+            ? { connect: categoryIds.map((id) => ({ id })) }
             : undefined,
         },
         include: PARTNER_INCLUDE,
@@ -119,9 +124,22 @@ export class PartnersService {
     const limit = parseInt(query.limit ?? '20', 10);
     const skip = (page - 1) * limit;
 
+    const categoryFilter = query.categoryId
+      ? query.categoryId.includes(',')
+        ? {
+            categories: {
+              some: {
+                id: { in: query.categoryId.split(',') },
+              },
+            },
+          }
+        : { categories: { some: { id: query.categoryId } } }
+      : {};
+
     const where = {
       type,
       isActive: true,
+      ...categoryFilter,
       ...(query.search
         ? {
             OR: [
@@ -190,7 +208,7 @@ export class PartnersService {
   ) {
     await this.ensureExists(id, type);
 
-    const { contacts, ...partnerData } = updatePartnerDto;
+    const { contacts, categoryIds, ...partnerData } = updatePartnerDto;
 
     try {
       return await this.prisma.partner.update({
@@ -209,6 +227,10 @@ export class PartnersService {
                     isPrimary: contact.isPrimary ?? false,
                   })),
                 }
+              : undefined,
+          categories:
+            categoryIds !== undefined
+              ? { set: categoryIds.map((id) => ({ id })) }
               : undefined,
         },
         include: PARTNER_INCLUDE,

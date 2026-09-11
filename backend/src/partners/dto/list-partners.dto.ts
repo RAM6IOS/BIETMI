@@ -22,4 +22,8 @@ export class ListPartnersDto {
   @IsString()
   @IsOptional()
   limit?: string = '20';
+
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
 }

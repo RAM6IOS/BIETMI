@@ -1,5 +1,6 @@
 import type { PurchaseOrder } from './purchaseOrders';
 import type { InvoiceSummary } from './invoices';
+import type { SupplierCategory } from './supplierCategories';
 import { ApiError, request } from './http';
 
 export { ApiError };
@@ -27,6 +28,7 @@ export interface Supplier {
   createdAt: string;
   updatedAt: string;
   contacts?: Contact[];
+  categories?: SupplierCategory[];
 }
 
 export interface SupplierInput {
@@ -37,6 +39,7 @@ export interface SupplierInput {
   paymentTerms?: string | null;
   currency?: PartnerCurrency;
   contacts?: Contact[];
+  categoryIds?: string[];
 }
 
 export interface ListSuppliersParams {
@@ -45,6 +48,7 @@ export interface ListSuppliersParams {
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;
+  categoryId?: string;
 }
 
 export type SupplierDetail = Supplier & {
@@ -70,6 +74,7 @@ export function listSuppliers(params: ListSuppliersParams = {}) {
       sortOrder: params.sortOrder,
       page: params.page ? String(params.page) : undefined,
       limit: params.limit ? String(params.limit) : undefined,
+      categoryId: params.categoryId,
     },
   });
 }

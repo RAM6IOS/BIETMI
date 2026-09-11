@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -7,11 +7,18 @@ import type {
   SupplierInput,
   PartnerCurrency,
 } from '../../api/suppliers';
+import {
+  listSupplierCategories,
+  createSupplierCategory,
+} from '../../api/supplierCategories';
+import type { SupplierCategory } from '../../api/supplierCategories';
 import { translateApiError } from '../../api/errors';
+import { useAuthRole } from '../../hooks/useAuthRole';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
+import { MultiSelect } from '../ui/MultiSelect';
 
 interface SupplierFormModalProps {
   supplier?: Supplier | null;
@@ -54,6 +61,7 @@ function toInput(
   paymentTerms: string,
   currency: PartnerCurrency,
   contacts: ContactDraft[],
+  categoryIds: string[],
 ): SupplierInput {
   const trimmedContacts = contacts
     .filter((c) => c.name.trim() !== '')
@@ -73,6 +81,7 @@ function toInput(
     paymentTerms: paymentTerms.trim() || null,
     currency,
     contacts: trimmedContacts.length > 0 ? trimmedContacts : undefined,
+    categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
   };
 }
 
@@ -82,6 +91,8 @@ export function SupplierFormModal({
   onSubmit,
 }: SupplierFormModalProps) {
   const { t } = useTranslation();
+  const role = useAuthRole();
+  const isAdmin = role === 'admin';
   const [name, setName] = useState(supplier?.name ?? '');
   const [commercialRegister, setCommercialRegister] = useState(
     supplier?.commercialRegister ?? '',
@@ -95,10 +106,30 @@ export function SupplierFormModal({
   const [contacts, setContacts] = useState<ContactDraft[]>(() =>
     toContactDrafts(supplier?.contacts),
   );
+  const [categories, setCategories] = useState<SupplierCategory[]>([]);
+  const [categoryIds, setCategoryIds] = useState<string[]>(
+    () => supplier?.categories?.map((c) => c.id) ?? [],
+  );
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSupplierCategories()
+      .then((result) => {
+        if (!cancelled) setCategories(result);
+      })
+      .catch(() => {
+        // categories are optional; keep empty list on failure
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const updateContact = (index: number, patch: Partial<ContactDraft>) => {
     setContacts((prev) =>
@@ -112,6 +143,24 @@ export function SupplierFormModal({
 
   const removeContact = (index: number) => {
     setContacts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCreateCategory = async () => {
+    if (newCategoryName.trim() === '') return;
+    setIsCreatingCategory(true);
+    setError('');
+    try {
+      const created = await createSupplierCategory({
+        name: newCategoryName.trim(),
+      });
+      setCategories((prev) => [...prev, created]);
+      setCategoryIds((prev) => [...prev, created.id]);
+      setNewCategoryName('');
+    } catch (err) {
+      setError(translateApiError(err) || t('common:errors.saveError'));
+    } finally {
+      setIsCreatingCategory(false);
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -132,6 +181,7 @@ export function SupplierFormModal({
           paymentTerms,
           currency,
           contacts,
+          categoryIds,
         ),
       );
     } catch (err) {
@@ -271,6 +321,51 @@ export function SupplierFormModal({
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               className="mt-1"
+            />
+          </div>
+
+          <div>
+            <span className="block text-sm font-medium text-gray-700">
+              {t('supplierCategories:categories')}
+            </span>
+            <MultiSelect
+              id="supplier-categories"
+              options={categories.map((c) => ({
+                value: c.id,
+                label: c.name,
+              }))}
+              selected={categoryIds}
+              onChange={setCategoryIds}
+              placeholder={t('suppliers:categoriesPlaceholder')}
+              className="mt-1"
+              extra={
+                isAdmin ? (
+                  <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+                    <Input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleCreateCategory();
+                        }
+                      }}
+                      placeholder={t('supplierCategories:name')}
+                      aria-label={t('supplierCategories:addCategory')}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleCreateCategory}
+                      disabled={isCreatingCategory || newCategoryName.trim() === ''}
+                    >
+                      {isCreatingCategory
+                        ? t('common:saving')
+                        : t('supplierCategories:addCategory')}
+                    </Button>
+                  </div>
+                ) : null
+              }
             />
           </div>
 
