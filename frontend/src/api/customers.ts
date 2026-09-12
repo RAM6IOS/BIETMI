@@ -1,5 +1,6 @@
 import type { PurchaseOrder } from './purchaseOrders';
 import type { InvoiceSummary } from './invoices';
+import type { QuoteSummary } from './quotes';
 import { ApiError, request } from './http';
 
 export { ApiError };
@@ -44,6 +45,7 @@ export interface ListCustomersParams {
 
 export type CustomerDetail = Customer & {
   purchaseOrders: PurchaseOrder[];
+  quotes: QuoteSummary[];
 };
 
 export interface PaginatedCustomers {

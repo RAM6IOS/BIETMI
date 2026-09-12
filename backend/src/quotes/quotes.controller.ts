@@ -86,6 +86,13 @@ export class QuotesController {
     return this.quotesService.updateStatus(user, id, dto);
   }
 
+  @Post(':id/create-revision')
+  @Roles(...QUOTE_ROLES)
+  @HttpCode(HttpStatus.CREATED)
+  createRevision(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.quotesService.createRevision(user, id);
+  }
+
   @Post(':id/convert-to-invoice')
   @Roles(...QUOTE_ROLES)
   @HttpCode(HttpStatus.OK)

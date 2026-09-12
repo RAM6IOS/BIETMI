@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Prisma, QuoteStatus, InvoiceStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
@@ -20,8 +21,6 @@ import {
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const COUNTER_ID = '00000000-0000-5000-8000-000000000000';
 
 const QUOTE_INCLUDE = {
   partner: {
@@ -44,6 +43,8 @@ const QUOTE_INCLUDE = {
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
   lines: { orderBy: { id: 'asc' as const } },
+  supersedesQuote: { select: { id: true, quoteNumber: true, status: true } },
+  revisions: { select: { id: true, quoteNumber: true, status: true } },
 } as const;
 
 const INVOICE_INCLUDE = {
@@ -120,16 +121,18 @@ export class QuotesService {
       computeTotals(dto.lines, dto.discountPercent ?? 0);
 
     return this.prisma.$transaction(async (tx) => {
+      const year = new Date().getFullYear();
+
       const rows = await tx.$queryRaw<
         Array<{ last_number: number }>
-      >`INSERT INTO "quote_counters" ("id", "last_number")
-        VALUES (${COUNTER_ID}::uuid, 1)
-        ON CONFLICT ("id")
+      >`INSERT INTO "quote_counters" ("id", "year", "last_number")
+        VALUES (${randomUUID()}::uuid, ${year}::int, 1)
+        ON CONFLICT ("year")
         DO UPDATE SET "last_number" = "quote_counters"."last_number" + 1
         RETURNING "last_number"`;
 
       const last = Number(rows[0].last_number);
-      const quoteNumber = String(last).padStart(3, '0');
+      const quoteNumber = `QT-${year}-${String(last).padStart(5, '0')}`;
 
       return tx.quote.create({
         data: {
@@ -223,12 +226,9 @@ export class QuotesService {
       throw new NotFoundException('عرض السعر غير موجود');
     }
 
-    if (
-      quote.status !== QuoteStatus.draft &&
-      quote.status !== QuoteStatus.revision_requested
-    ) {
+    if (quote.status !== QuoteStatus.draft) {
       throw new ConflictException(
-        'لا يمكن إرسال عرض السعر إلا من حالة المسودة أو طلب المراجعة',
+        'لا يمكن إرسال عرض السعر إلا من حالة المسودة',
       );
     }
 
@@ -263,9 +263,7 @@ export class QuotesService {
     const quote = await this.findScoped(id);
     this.assertCanWrite(user);
 
-    const canEdit =
-      quote.status === QuoteStatus.draft ||
-      quote.status === QuoteStatus.revision_requested;
+    const canEdit = quote.status === QuoteStatus.draft;
     if (!canEdit) {
       throw new ConflictException('لا يمكن تعديل عرض السعر في هذه الحالة');
     }
@@ -322,6 +320,83 @@ export class QuotesService {
       where: { id },
       data,
       include: QUOTE_INCLUDE,
+    });
+  }
+
+  async createRevision(user: AuthUser, id: string) {
+    this.ensureValidId(id);
+    this.assertCanWrite(user);
+
+    return this.prisma.$transaction(async (tx) => {
+      const quote = await tx.quote.findUnique({
+        where: { id },
+        include: { lines: true },
+      });
+      if (!quote) {
+        throw new NotFoundException('عرض السعر غير موجود');
+      }
+
+      if (quote.status !== QuoteStatus.revision_requested) {
+        throw conflictWithCode(
+          'CONFLICT_QUOTE_REVISION',
+          'لا يمكن إنشاء نسخة معدَّلة إلا من عرض في حالة طلب المراجعة',
+        );
+      }
+
+      const year = new Date().getFullYear();
+      const rows = await tx.$queryRaw<
+        Array<{ last_number: number }>
+      >`INSERT INTO "quote_counters" ("id", "year", "last_number")
+        VALUES (${randomUUID()}::uuid, ${year}::int, 1)
+        ON CONFLICT ("year")
+        DO UPDATE SET "last_number" = "quote_counters"."last_number" + 1
+        RETURNING "last_number"`;
+
+      const last = Number(rows[0].last_number);
+      const quoteNumber = `QT-${year}-${String(last).padStart(5, '0')}`;
+
+      const discountPercent = round2(
+        new Prisma.Decimal(String(Number(quote.discountPercent ?? 0))),
+      );
+      const { computed, subtotal, discountAmount, tvaAmount, totalAmount } =
+        computeTotals(
+          quote.lines.map((line) => ({
+            description: line.description,
+            unit: line.unit ?? undefined,
+            quantity: Number(line.quantity),
+            unitPrice: Number(line.unitPrice),
+          })),
+          Number(discountPercent),
+        );
+
+      return tx.quote.create({
+        data: {
+          quoteNumber,
+          partnerId: quote.partnerId,
+          createdByUserId: user.userId,
+          objet: quote.objet,
+          status: QuoteStatus.draft,
+          subtotal,
+          discountPercent,
+          discountAmount,
+          tvaAmount,
+          totalAmount,
+          paymentMethods: quote.paymentMethods
+            ? (quote.paymentMethods as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+          supersedesQuoteId: quote.id,
+          lines: {
+            create: computed.map((line) => ({
+              description: line.description,
+              unit: line.unit ?? null,
+              quantity: new Prisma.Decimal(String(line.quantity)),
+              unitPrice: new Prisma.Decimal(String(line.unitPrice)),
+              lineTotal: line.lineTotal,
+            })),
+          },
+        },
+        include: QUOTE_INCLUDE,
+      });
     });
   }
 

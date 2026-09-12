@@ -31,6 +31,22 @@ export interface QuoteCreator {
   fullName: string;
 }
 
+export interface QuoteRevisionSummary {
+  id: string;
+  quoteNumber: string;
+  status: QuoteStatusValue;
+}
+
+export interface QuoteSummary {
+  id: string;
+  quoteNumber: string;
+  status: QuoteStatusValue;
+  createdAt: string;
+  supersedesQuoteId: string | null;
+  supersedesQuote?: Pick<QuoteRevisionSummary, 'id' | 'quoteNumber'> | null;
+  revisions?: Pick<QuoteRevisionSummary, 'id' | 'quoteNumber'>[];
+}
+
 export interface QuoteLine {
   id: string;
   quoteId: string;
@@ -55,6 +71,9 @@ export interface Quote {
   totalAmount: string;
   paymentMethods: PaymentMethod[] | null;
   convertedToInvoiceId: string | null;
+  supersedesQuoteId: string | null;
+  supersedesQuote?: QuoteRevisionSummary | null;
+  revisions?: QuoteRevisionSummary[];
   createdAt: string;
   updatedAt: string;
   partner?: QuotePartner;
@@ -140,4 +159,8 @@ export function convertQuoteToInvoice(id: string) {
   return request<Invoice>(`/quotes/${id}/convert-to-invoice`, {
     method: 'POST',
   });
+}
+
+export function createQuoteRevision(id: string) {
+  return request<Quote>(`/quotes/${id}/create-revision`, { method: 'POST' });
 }

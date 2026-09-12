@@ -146,9 +146,12 @@ id (PK), username (unique), passwordHash, role (enum: admin/commercial/purchasin
 Partner (1) ──< (N) Contact
 Partner (1) ──< (N) Invoice ──< (N) InvoiceLine
 Partner (1) ──< (N) Contract
+Partner (1) ──< (N) Quote ──< (N) QuoteLine
+Quote (1) ── has many revisions ──< (N) Quote   [supersedesQuoteId — علاقة ذاتية، غير فريدة]
 Partner (N) ──< (M) SupplierCategory   [جدول ربط ضمني `_PartnerToSupplierCategory` — خاص بالموردين]
 User    (1) ──< (N) Invoice   [createdByUserId]
 User    (1) ──< (N) Contract  [createdByUserId]
+User    (1) ──< (N) Quote     [createdByUserId]
 ```
 
 ### 5.7 SupplierCategory (تصنيفات الموردين) — علاقة Many-to-Many
@@ -166,6 +169,29 @@ User    (1) ──< (N) Contract  [createdByUserId]
 - `DELETE` يُرفض بحالة **409** إذا كان التصنيف مرتبطاً بأي مورد.
 - عرض/تعديل المورد (`POST/PATCH /suppliers`) يقبل `categoryIds: string[]` ويستبدل الارتباط كلياً عند تمريره (`set`).
 - فلترة قائمة الموردين عبر `GET /suppliers?categoryId=<uuid>` بمنطق **ANY/OR**: قيم مفصولة بفواصل (`categoryId=a,b`) ترجع الموردين المنتمين لأي تصنيف منها — لا يشترط تطابق كل التصنيفات.
+
+### 5.8 Quote و QuoteLine و QuoteCounter (عروض الأسعار وبنودها وعداداتها)
+
+عرض سعر واحد يحتوي عدة بنود (One-to-Many إلى `QuoteLine`).
+
+**Quote**: id (PK, UUID), quoteNumber (unique، يُولَّد من الخادم فقط ضمن Transaction آمنة بصيغة `QT-YYYY-XXXXX` — السنة + لاحق من 5 خانات)، partnerId (FK → Partner)، createdByUserId (FK → User)، status (enum: draft/sent/accepted/rejected/revision_requested)، objet (nullable)، subtotal/discountPercent/discountAmount/tvaAmount/totalAmount (Decimal)، paymentMethods (JSON nullable)، supersedesQuoteId (FK ذاتي → Quote، nullable، **غير فريد** — يجوز لأصل واحد أكثر من نسخة)، convertedToInvoiceId (FK → Invoice، nullable)، createdAt/updatedAt.
+
+**QuoteLine**: id (PK), quoteId (FK), description, unit (nullable), quantity, unitPrice, lineTotal (محسوب).
+
+**QuoteCounter**: id (PK, UUID عشوائي)، year (Int، فريد)، lastNumber — عدّاد واحد لكل سنة بمنطق `INSERT ... ON CONFLICT ("year") DO UPDATE SET last_number = last_number + 1`، تماماً كنمط عدّاد الفواتير.
+
+**آلة الحالات (State Machine)**:
+```
+draft ──send──> sent
+sent ──> accepted | rejected | revision_requested      (الثلاث حالات نهائية)
+revision_requested ──[POST /quotes/:id/create-revision فقط]──> نسخة جديدة draft
+```
+
+**قواعد العمل الحاسمة**:
+- `revision_requested` حالة **نهائية مجمَّدة للعرض الأصلي**: يُمتنع نهائياً `PATCH` التعديل وإعادة الإرسال (`POST /send`) — كلاهما يُرفض بحالة **409**. الاختصار الوحيد هو إنشاء نسخة جديدة.
+- `POST /quotes/:id/create-revision` ينسخ إلى عرض جديد بحالة `draft`: partnerId + objet + discountPercent + paymentMethods + بنود العرض، مع ترقيم تسلسلي جديد، و`supersedesQuoteId` = الأصل. **لا تُكتب أي حقل على الأصل** (يبقى مجمّداً تماماً، حتى `updatedAt`)، ويُرفض بـ 409 إذا لم تكن حالة الأصل `revision_requested`.
+- العلاقة الذاتية تُمكّن الواجهة من عرض روابط «نسخة معدَّلة من…» (supersedesQuote) و«استُبدِل بـ…» (revisions).
+- `PATCH /quotes/:id` و`POST /quotes/:id/send` مقتصران على `draft` فقط؛ `GET` متاحة لصلاحيات `admin`+`commercial`، والكتابة مثلها.
 
 ## 6. سياسة العمل مع وكيل الذكاء الاصطناعي في كتابة الكود
 
@@ -231,6 +257,8 @@ User    (1) ──< (N) Contract  [createdByUserId]
 | 9 | جهات الاتصال (Contact) جدول علائقي منفصل يدعم عدة جهات اتصال لكل Partner — وليس حقلاً واحداً `contactPerson` كما في المخطط المفاهيمي المبسَّط الأول. أدق لواقع عمل BIETMI (عملاء/موردون كبار بعدة جهات اتصال). | معتمد |
 | 10 | REQ-503/504 (إدارة المستخدمين: إنشاء حسابات من طرف المدير فقط، إلزام تغيير كلمة المرور المؤقتة عند أول دخول) — اكتُشفت كفجوة في SRS الأصلي أثناء تصميم الشاشات، ويجب إضافتها رسمياً لوثيقة SRS. | معتمد — بانتظار تحديث SRS_v1.md |
 | 11 | تصنيفات الموردين (`SupplierCategory`) كيان مستقل + علاقة Many-to-Many مع `Partner` (جدول ربط ضمني) — قرار محسوم، موثَّق بالقسم 5.7. | معتمد |
+| 12 | ترقيم عروض الأسعار بصيغة `QT-YYYY-XXXXX` (سنة + لاحق 5 خانات) بعدّاد سنوي `QuoteCounter` منفصل لكل سنة — نفس نمط عدّاد الفواتير (موثَّق بالقسم 5.8). | معتمد |
+| 13 | **مراجعة عروض الأسعار عبر نسخ جديدة فقط (Default-on-Revision)**: `revision_requested` حالة نهائية مجمَّدة للأصل (لا تعديل `PATCH` ولا إعادة إرسال — رفض 409)، وإنشاء نسخة معدَّلة حصرياً عبر `POST /quotes/:id/create-revision` مع `supersedesQuoteId` (علاقة ذاتية غير فريدة). **يُلغي القرار السابق** الذي كان يسمح بـ `PATCH` وإعادة الإرسال من `revision_requested` — الإلغاء بناءً على ملاحظة BIETMI الفعلية. موثَّق بالقسم 5.8. | معتمد — يلغي القرار السابق |
 
 ## 9. الوثائق المرجعية المرتبطة
 

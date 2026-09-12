@@ -7,6 +7,7 @@ import {
   deleteQuote,
   sendQuote,
   convertQuoteToInvoice,
+  createQuoteRevision,
 } from '../../api/quotes';
 import type { Quote, QuoteStatusValue } from '../../api/quotes';
 import { translateApiError } from '../../api/errors';
@@ -79,6 +80,8 @@ export function QuotesPage() {
   const [isConverting, setIsConverting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Quote | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [revisionTarget, setRevisionTarget] = useState<Quote | null>(null);
+  const [isCreatingRevision, setIsCreatingRevision] = useState(false);
 
   const parseSort = (v: string) => {
     const [by, order] = v.split('-') as [
@@ -190,6 +193,21 @@ export function QuotesPage() {
       setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCreateRevision = async () => {
+    if (!revisionTarget) return;
+    setIsCreatingRevision(true);
+    try {
+      const revision = await createQuoteRevision(revisionTarget.id);
+      setRevisionTarget(null);
+      navigate(`/quotes/${revision.id}`);
+    } catch (err) {
+      setError(translateApiError(err) || t('quotes:createRevisionFailed'));
+      setRevisionTarget(null);
+    } finally {
+      setIsCreatingRevision(false);
     }
   };
 
@@ -378,7 +396,7 @@ export function QuotesPage() {
                       {t('quotes:viewInvoice')}
                     </Button>
                   )}
-                  {canWrite && (q.status === 'draft' || q.status === 'revision_requested') && (
+                  {canWrite && q.status === 'draft' && (
                     <>
                       <Button
                         variant="ghost"
@@ -405,6 +423,16 @@ export function QuotesPage() {
                         {t('common:delete')}
                       </Button>
                     </>
+                  )}
+                  {canWrite && q.status === 'revision_requested' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRevisionTarget(q)}
+                      className="text-primary-600 min-h-11"
+                    >
+                      {t('quotes:createRevision')}
+                    </Button>
                   )}
                 </>
               )}
@@ -491,6 +519,21 @@ export function QuotesPage() {
           isWorking={isDeleting}
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {revisionTarget && (
+        <ConfirmDialog
+          title={t('quotes:createRevisionTitle')}
+          description={t('quotes:createRevisionConfirm')}
+          confirmLabel={
+            isCreatingRevision
+              ? t('quotes:creatingRevision')
+              : t('quotes:createRevision')
+          }
+          isWorking={isCreatingRevision}
+          onConfirm={handleCreateRevision}
+          onCancel={() => setRevisionTarget(null)}
         />
       )}
     </div>

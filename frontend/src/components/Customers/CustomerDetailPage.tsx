@@ -16,16 +16,18 @@ import { Badge } from '../ui/Badge';
 import { EmptyState } from '../ui/EmptyState';
 import { Spinner } from '../ui/Spinner';
 import { InvoicesList } from '../Invoices/InvoicesList';
+import { QuotesList } from '../Quotes/QuotesList';
 
-type TabKey = 'info' | 'invoices';
+type TabKey = 'info' | 'invoices' | 'quotes';
 
 const TABS: {
   key: TabKey;
   labelKey: string;
-  countKey: 'invoices' | null;
+  countKey: 'invoices' | 'quotes' | null;
 }[] = [
   { key: 'info', labelKey: 'customers:info', countKey: null },
   { key: 'invoices', labelKey: 'customers:invoices', countKey: 'invoices' },
+  { key: 'quotes', labelKey: 'customers:quotes', countKey: 'quotes' },
 ];
 
 export function CustomerDetailPage() {
@@ -38,7 +40,9 @@ export function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>(() =>
-    searchParams.get('tab') === 'invoices' ? 'invoices' : 'info',
+    searchParams.get('tab') === 'invoices' || searchParams.get('tab') === 'quotes'
+      ? (searchParams.get('tab') as TabKey)
+      : 'info',
   );
 
   const [showEdit, setShowEdit] = useState(false);
@@ -222,6 +226,8 @@ export function CustomerDetailPage() {
           {activeTab === 'invoices' && (
             <InvoicesList invoices={customer.invoices} />
           )}
+
+          {activeTab === 'quotes' && <QuotesList quotes={customer.quotes} />}
         </div>
       </Card>
 

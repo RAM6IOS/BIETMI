@@ -16,6 +16,7 @@ function mockQuotesService() {
     send: jest.fn(),
     updateStatus: jest.fn(),
     convertToInvoice: jest.fn(),
+    createRevision: jest.fn(),
   };
 }
 
@@ -93,5 +94,15 @@ describe('QuotesController', () => {
     service.convertToInvoice.mockResolvedValue({ id: '1', status: 'draft' });
     await controller.convertToInvoice(USER, 'quote-1');
     expect(service.convertToInvoice).toHaveBeenCalledWith(USER, 'quote-1');
+  });
+
+  it('createRevision forwards the current user and id', async () => {
+    service.createRevision.mockResolvedValue({
+      id: '2',
+      status: 'draft',
+      supersedesQuoteId: 'quote-1',
+    });
+    await controller.createRevision(USER, 'quote-1');
+    expect(service.createRevision).toHaveBeenCalledWith(USER, 'quote-1');
   });
 });

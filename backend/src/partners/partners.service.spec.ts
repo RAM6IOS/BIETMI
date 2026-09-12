@@ -230,6 +230,30 @@ describe('PartnersService', () => {
         }),
       });
     });
+
+    it('should include quotes with narrowed fields, newest createdAt first', async () => {
+      prisma.partner.findUnique.mockResolvedValue({ id: UUID });
+
+      await service.findOne(UUID, PartnerType.customer);
+
+      expect(prisma.partner.findUnique).toHaveBeenCalledWith({
+        where: { id: UUID, type: 'customer' },
+        include: expect.objectContaining({
+          quotes: {
+            select: {
+              id: true,
+              quoteNumber: true,
+              status: true,
+              createdAt: true,
+              supersedesQuoteId: true,
+              supersedesQuote: { select: { id: true, quoteNumber: true } },
+              revisions: { select: { id: true, quoteNumber: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        }),
+      });
+    });
   });
 
   describe('update', () => {

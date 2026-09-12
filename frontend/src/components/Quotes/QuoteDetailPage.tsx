@@ -7,6 +7,7 @@ import {
   sendQuote,
   updateQuoteStatus,
   convertQuoteToInvoice,
+  createQuoteRevision,
 } from '../../api/quotes';
 import type { Quote, QuoteStatusValue } from '../../api/quotes';
 import type { Invoice } from '../../api/invoices';
@@ -27,6 +28,7 @@ type PendingAction =
   | { kind: 'send' }
   | { kind: 'status'; status: QuoteStatusValue }
   | { kind: 'convert' }
+  | { kind: 'revision' }
   | { kind: 'delete' }
   | null;
 
@@ -106,6 +108,21 @@ export function QuoteDetailPage() {
     }
   };
 
+  const handleCreateRevision = async () => {
+    if (!id) return;
+    setIsWorking(true);
+    try {
+      const revision = await createQuoteRevision(id);
+      setPending(null);
+      navigate(`/quotes/${revision.id}`);
+    } catch (err) {
+      setActionError(translateApiError(err) || t('quotes:createRevisionFailed'));
+      setPending(null);
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     setIsWorking(true);
@@ -141,8 +158,7 @@ export function QuoteDetailPage() {
     );
   }
 
-  const isEditable =
-    quote.status === 'draft' || quote.status === 'revision_requested';
+  const isEditable = quote.status === 'draft';
   const converted = quote.convertedToInvoiceId;
 
   let confirmTitle = '';
@@ -165,6 +181,10 @@ export function QuoteDetailPage() {
     confirmTitle = t('quotes:convertTitle');
     confirmDescription = t('quotes:convertDetailConfirm');
     confirmLabel = t('quotes:convertToInvoice');
+  } else if (pending?.kind === 'revision') {
+    confirmTitle = t('quotes:createRevisionTitle');
+    confirmDescription = t('quotes:createRevisionConfirm');
+    confirmLabel = t('quotes:createRevision');
   } else if (pending?.kind === 'delete') {
     confirmTitle = t('quotes:deleteTitle');
     confirmDescription = t('quotes:deleteConfirm');
@@ -232,6 +252,11 @@ export function QuoteDetailPage() {
               </Button>
             </>
           )}
+          {quote.status === 'revision_requested' && canWrite && (
+            <Button onClick={() => setPending({ kind: 'revision' })}>
+              {t('quotes:createRevision')}
+            </Button>
+          )}
           {quote.status === 'accepted' && canWrite && !converted && (
             <Button onClick={() => setPending({ kind: 'convert' })}>
               {t('quotes:convertToInvoice')}
@@ -257,6 +282,33 @@ export function QuoteDetailPage() {
         </div>
       )}
 
+      {(quote.supersedesQuote || (quote.revisions?.length ?? 0) > 0) && (
+        <div className="no-print mb-4 flex flex-col gap-2 text-sm">
+          {quote.supersedesQuote && (
+            <p className="text-gray-600">
+              {t('quotes:revisedFrom')}{' '}
+              <Link
+                to={`/quotes/${quote.supersedesQuote.id}`}
+                className="text-primary-600 hover:text-primary-800 underline"
+              >
+                {quote.supersedesQuote.quoteNumber}
+              </Link>
+            </p>
+          )}
+          {(quote.revisions ?? []).map((revision) => (
+            <p key={revision.id} className="text-gray-600">
+              {t('quotes:replacedBy')}{' '}
+              <Link
+                to={`/quotes/${revision.id}`}
+                className="text-primary-600 hover:text-primary-800 underline"
+              >
+                {revision.quoteNumber}
+              </Link>
+            </p>
+          ))}
+        </div>
+      )}
+
       <Card className="p-4 sm:p-8 print-area">
         <QuoteDocument quote={quote} company={company} />
       </Card>
@@ -275,7 +327,9 @@ export function QuoteDetailPage() {
                 ? handleStatusChange
                 : pending.kind === 'convert'
                   ? handleConvert
-                  : handleDelete
+                  : pending.kind === 'revision'
+                    ? handleCreateRevision
+                    : handleDelete
           }
           onCancel={() => setPending(null)}
         />

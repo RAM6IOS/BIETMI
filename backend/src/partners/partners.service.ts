@@ -36,6 +36,16 @@ const INVOICE_SELECT = {
   createdAt: true,
 } as const;
 
+const QUOTE_SELECT = {
+  id: true,
+  quoteNumber: true,
+  status: true,
+  createdAt: true,
+  supersedesQuoteId: true,
+  supersedesQuote: { select: { id: true, quoteNumber: true } },
+  revisions: { select: { id: true, quoteNumber: true } },
+} as const;
+
 const PARTNER_INCLUDE = {
   contacts: true,
   categories: { select: { id: true, name: true } },
@@ -45,6 +55,10 @@ const PARTNER_INCLUDE = {
   },
   purchaseOrders: {
     select: PURCHASE_ORDER_SELECT,
+    orderBy: { createdAt: 'desc' as const },
+  },
+  quotes: {
+    select: QUOTE_SELECT,
     orderBy: { createdAt: 'desc' as const },
   },
 } as const;

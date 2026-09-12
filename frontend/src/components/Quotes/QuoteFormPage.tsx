@@ -120,7 +120,7 @@ export function QuoteFormPage() {
     getQuote(id)
       .then((q: Quote) => {
         if (cancelled) return;
-        if (q.status !== 'draft' && q.status !== 'revision_requested') {
+        if (q.status !== 'draft') {
           setNotEditable(true);
           return;
         }

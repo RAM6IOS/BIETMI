@@ -180,11 +180,14 @@ model Quote {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
+  supersedesQuoteId String?     @map("supersedes_quote_id") @db.Uuid
   partner           Partner        @relation(fields: [partnerId], references: [id], onDelete: Restrict)
   createdBy         User           @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
   lines             QuoteLine[]
   convertedToInvoice Invoice?      @relation("quoteConversion", fields: [convertedToInvoiceId], references: [id], onDelete: SetNull)
   sourceInvoice     Invoice?       @relation("invoiceQuote")
+  supersedesQuote   Quote?         @relation("QuoteRevision", fields: [supersedesQuoteId], references: [id], onDelete: SetNull)
+  revisions         Quote[]        @relation("QuoteRevision")
 
   @@map("quotes")
 }
@@ -205,8 +208,10 @@ model QuoteLine {
 
 model QuoteCounter {
   id         String @id @default(uuid()) @db.Uuid
+  year       Int
   lastNumber Int    @default(0) @map("last_number")
 
+  @@unique([year])
   @@map("quote_counters")
 }
 

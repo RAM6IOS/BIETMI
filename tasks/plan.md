@@ -12,25 +12,30 @@ converts — only when accepted — into a draft Invoice. Also removes the legac
 
 1. Remove `InvoiceStatus.devis` + `POST /invoices/:id/quote` + the invoice→devis
    UI. Migration flips any existing `devis` invoice rows to `draft`.
-2. Quote numbering: global (like PurchaseOrders) — single-row `QuoteCounter`,
-   `quoteNumber` = 3-digit padded (`001`, `002`…).
+2. Quote numbering: per-year `QuoteCounter` (like Invoices) — one counter row
+   per `year`, `quoteNumber` = `QT-YYYY-XXXXX` (year + 5-digit padded).
 3. Permissions: write AND read = `admin` + `commercial` only.
 4. Endpoints:
    - `POST   /quotes`                      → create draft
    - `GET    /quotes`                      → list (status/search/sort/pagination)
    - `GET    /quotes/:id`                  → detail
-   - `PATCH  /quotes/:id`                  → edit; only status ∈ {draft, revision_requested}, else 409
+   - `PATCH  /quotes/:id`                  → edit; only status = draft, else 409
    - `DELETE /quotes/:id`                  → delete; only status = draft, else 409
-   - `POST   /quotes/:id/send`             → draft|revision_requested → sent, else 409
+   - `POST   /quotes/:id/send`             → draft → sent, else 409
    - `PATCH  /quotes/:id/status`           → sent → accepted|rejected|revision_requested (strict machine)
+   - `POST   /quotes/:id/create-revision`  → revision_requested only, else 409; clones into a
+     new draft quote (partner+objet+discount+payment methods+lines), new sequential number,
+     sets `supersedesQuoteId` = original; original is NEVER written (fully frozen)
    - `POST   /quotes/:id/convert-to-invoice` → accepted only; creates draft Invoice,
      copies partner+lines+objet, sets Invoice.quoteId + Quote.convertedToInvoiceId;
      idempotent (returns existing invoice if already converted)
 5. State machine: draft → sent ; sent → accepted|rejected|revision_requested ;
-   revision_requested → sent (re-send) ; accepted|rejected terminal.
+   revision_requested is FINAL/frozen for the original (no PATCH, no re-send — 409);
+   a revised quote is created ONLY via `create-revision`.
 6. Same rounding logic as invoices (subtotal 2dp, TVA 19%, total 2dp).
 7. PDF: unified printable document template with `mode: 'facture' | 'devis'`;
    Devis shows Délais de réalisation / Validité de l'offre, Facture does not.
+8. UI: quote detail/list expose revision links (supersedesQuote → «نسخة معدَّلة من…», revisions → «استُبدِل بـ…») and a «إنشاء نسخة معدَّلة» action for revision_requested quotes.
 
 ## Schema / Migration
 

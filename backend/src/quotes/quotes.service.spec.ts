@@ -39,6 +39,8 @@ const QUOTE_INCLUDE = {
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
   lines: { orderBy: { id: 'asc' as const } },
+  supersedesQuote: { select: { id: true, quoteNumber: true, status: true } },
+  revisions: { select: { id: true, quoteNumber: true, status: true } },
 } as const;
 
 const INVOICE_INCLUDE = {
@@ -134,7 +136,7 @@ describe('QuotesService', () => {
       tx.$queryRaw.mockResolvedValue([{ last_number: 1 }]);
       tx.quote.create.mockResolvedValue({
         id: UUID,
-        quoteNumber: '001',
+        quoteNumber: 'QT-2026-00001',
         status: 'draft',
       });
 
@@ -146,7 +148,7 @@ describe('QuotesService', () => {
       expect(tx.$queryRaw).toHaveBeenCalled();
       expect(tx.quote.create).toHaveBeenCalledWith({
         data: {
-          quoteNumber: '001',
+          quoteNumber: 'QT-2026-00001',
           partnerId: PARTNER_ID,
           createdByUserId: USER_ID,
           objet: null,
@@ -171,7 +173,7 @@ describe('QuotesService', () => {
         },
         include: QUOTE_INCLUDE,
       });
-      expect(result.quoteNumber).toBe('001');
+      expect(result.quoteNumber).toBe('QT-2026-00001');
     });
 
     it('should apply per-line rounding and pad numbers to 3 digits', async () => {
@@ -181,7 +183,10 @@ describe('QuotesService', () => {
       });
       const tx = mockTransaction();
       tx.$queryRaw.mockResolvedValue([{ last_number: 21 }]);
-      tx.quote.create.mockResolvedValue({ id: UUID, quoteNumber: '021' });
+      tx.quote.create.mockResolvedValue({
+        id: UUID,
+        quoteNumber: 'QT-2026-00021',
+      });
 
       await service.create(ADMIN, {
         partnerId: PARTNER_ID,
@@ -194,7 +199,7 @@ describe('QuotesService', () => {
 
       expect(tx.quote.create).toHaveBeenCalledWith({
         data: {
-          quoteNumber: '021',
+          quoteNumber: 'QT-2026-00021',
           partnerId: PARTNER_ID,
           createdByUserId: USER_ID,
           objet: null,
@@ -242,7 +247,10 @@ describe('QuotesService', () => {
       });
       const tx = mockTransaction();
       tx.$queryRaw.mockResolvedValue([{ last_number: 3 }]);
-      tx.quote.create.mockResolvedValue({ id: UUID, quoteNumber: '003' });
+      tx.quote.create.mockResolvedValue({
+        id: UUID,
+        quoteNumber: 'QT-2026-00003',
+      });
 
       await service.create(COMMERCIAL, {
         partnerId: PARTNER_ID,
@@ -253,7 +261,7 @@ describe('QuotesService', () => {
 
       expect(tx.quote.create).toHaveBeenCalledWith({
         data: {
-          quoteNumber: '003',
+          quoteNumber: 'QT-2026-00003',
           partnerId: PARTNER_ID,
           createdByUserId: USER_ID,
           objet: null,
@@ -405,10 +413,12 @@ describe('QuotesService', () => {
       });
     });
 
-    it('should resend a revision_requested quote', async () => {
+    it('should reject re-sending a revision_requested quote (terminal state)', async () => {
       mockQuote(QuoteStatus.revision_requested);
-      const result = await service.send(COMMERCIAL, UUID);
-      expect(result.status).toBe('sent');
+      await expect(service.send(COMMERCIAL, UUID)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.quote.update).not.toHaveBeenCalled();
     });
 
     it('should reject sending an accepted quote', async () => {
@@ -541,10 +551,12 @@ describe('QuotesService', () => {
       });
     });
 
-    it('should edit a revision_requested quote', async () => {
+    it('should reject editing a revision_requested quote (frozen, use create-revision)', async () => {
       mockQuote(QuoteStatus.revision_requested);
-      await service.update(COMMERCIAL, UUID, { objet: 'revised' });
-      expect(prisma.quote.update).toHaveBeenCalled();
+      await expect(
+        service.update(COMMERCIAL, UUID, { objet: 'revised' }),
+      ).rejects.toThrow(ConflictException);
+      expect(prisma.quote.update).not.toHaveBeenCalled();
     });
 
     it('should reject editing an accepted quote', async () => {
@@ -564,6 +576,174 @@ describe('QuotesService', () => {
       await expect(
         service.update(COMMERCIAL, UUID, { partnerId: PARTNER_ID }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('createRevision', () => {
+    function mockTransaction() {
+      const tx = {
+        $queryRaw: jest.fn(),
+        quote: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+      );
+      return tx;
+    }
+
+    function mockOriginalQuote(status: QuoteStatus) {
+      return {
+        id: UUID,
+        quoteNumber: 'QT-2026-00001',
+        partnerId: PARTNER_ID,
+        createdByUserId: USER_ID,
+        status,
+        objet: 'Devis clim',
+        discountPercent: new Prisma.Decimal('10.00'),
+        discountAmount: new Prisma.Decimal('100.00'),
+        subtotal: new Prisma.Decimal('1000'),
+        tvaAmount: new Prisma.Decimal('171'),
+        totalAmount: new Prisma.Decimal('1071'),
+        paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+        lines: [
+          {
+            id: 'l1',
+            quoteId: UUID,
+            description: 'Item A',
+            unit: null,
+            quantity: new Prisma.Decimal('2'),
+            unitPrice: new Prisma.Decimal('500'),
+            lineTotal: new Prisma.Decimal('1000'),
+          },
+        ],
+      };
+    }
+
+    it('should create a new draft quote copying partner, lines, discount, objet, payment methods and the next sequence number, without touching the original', async () => {
+      const tx = mockTransaction();
+      tx.quote.findUnique.mockResolvedValue(
+        mockOriginalQuote(QuoteStatus.revision_requested),
+      );
+      tx.$queryRaw.mockResolvedValue([{ last_number: 2 }]);
+      tx.quote.create.mockResolvedValue({
+        id: 'new-revision-id',
+        quoteNumber: 'QT-2026-00002',
+        status: QuoteStatus.draft,
+      });
+
+      const result = await service.createRevision(COMMERCIAL, UUID);
+
+      expect(tx.quote.findUnique).toHaveBeenCalledWith({
+        where: { id: UUID },
+        include: { lines: true },
+      });
+      expect(tx.quote.update).not.toHaveBeenCalled();
+      expect(tx.quote.create).toHaveBeenCalledWith({
+        data: {
+          quoteNumber: 'QT-2026-00002',
+          partnerId: PARTNER_ID,
+          createdByUserId: USER_ID,
+          objet: 'Devis clim',
+          status: QuoteStatus.draft,
+          subtotal: new Prisma.Decimal('1000'),
+          discountPercent: new Prisma.Decimal('10.00'),
+          discountAmount: new Prisma.Decimal('100.00'),
+          tvaAmount: new Prisma.Decimal('171'),
+          totalAmount: new Prisma.Decimal('1071'),
+          paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+          supersedesQuoteId: UUID,
+          lines: {
+            create: [
+              {
+                description: 'Item A',
+                unit: null,
+                quantity: new Prisma.Decimal('2'),
+                unitPrice: new Prisma.Decimal('500'),
+                lineTotal: new Prisma.Decimal('1000'),
+              },
+            ],
+          },
+        },
+        include: QUOTE_INCLUDE,
+      });
+      expect(result.quoteNumber).toBe('QT-2026-00002');
+    });
+
+    it('should store DbNull payment methods when the original has none', async () => {
+      const tx = mockTransaction();
+      const original = mockOriginalQuote(QuoteStatus.revision_requested);
+      original.paymentMethods = null;
+      tx.quote.findUnique.mockResolvedValue(original);
+      tx.$queryRaw.mockResolvedValue([{ last_number: 4 }]);
+      tx.quote.create.mockResolvedValue({ id: 'new-revision-id' });
+
+      await service.createRevision(COMMERCIAL, UUID);
+
+      expect(tx.quote.create).toHaveBeenCalledWith({
+        data: {
+          quoteNumber: 'QT-2026-00004',
+          partnerId: PARTNER_ID,
+          createdByUserId: USER_ID,
+          objet: 'Devis clim',
+          status: QuoteStatus.draft,
+          subtotal: new Prisma.Decimal('1000'),
+          discountPercent: new Prisma.Decimal('10.00'),
+          discountAmount: new Prisma.Decimal('100.00'),
+          tvaAmount: new Prisma.Decimal('171'),
+          totalAmount: new Prisma.Decimal('1071'),
+          paymentMethods: Prisma.DbNull,
+          supersedesQuoteId: UUID,
+          lines: {
+            create: [
+              {
+                description: 'Item A',
+                unit: null,
+                quantity: new Prisma.Decimal('2'),
+                unitPrice: new Prisma.Decimal('500'),
+                lineTotal: new Prisma.Decimal('1000'),
+              },
+            ],
+          },
+        },
+        include: QUOTE_INCLUDE,
+      });
+    });
+
+    it.each([
+      QuoteStatus.draft,
+      QuoteStatus.sent,
+      QuoteStatus.accepted,
+      QuoteStatus.rejected,
+    ])(
+      'should reject creating a revision of a %s quote (409)',
+      async (status) => {
+        const tx = mockTransaction();
+        tx.quote.findUnique.mockResolvedValue(mockOriginalQuote(status));
+
+        await expect(service.createRevision(COMMERCIAL, UUID)).rejects.toThrow(
+          ConflictException,
+        );
+        expect(tx.quote.create).not.toHaveBeenCalled();
+        expect(tx.quote.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('should throw NotFound for a missing quote', async () => {
+      const tx = mockTransaction();
+      tx.quote.findUnique.mockResolvedValue(null);
+
+      await expect(service.createRevision(COMMERCIAL, UUID)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should forbid purchasing and accountant users', async () => {
+      await expect(service.createRevision(PURCHASING, UUID)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(service.createRevision(ACCOUNTANT, UUID)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 

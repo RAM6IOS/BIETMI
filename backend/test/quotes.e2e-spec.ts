@@ -21,6 +21,9 @@ interface QuoteResponse {
   totalAmount: string;
   paymentMethods: Array<{ label: string; percentage: number }> | null;
   convertedToInvoiceId: string | null;
+  supersedesQuoteId: string | null;
+  supersedesQuote: { id: string; quoteNumber: string; status: string } | null;
+  revisions: Array<{ id: string; quoteNumber: string; status: string }>;
   partner: { id: string; name: string; type: string };
   createdBy: { id: string; username: string; fullName: string };
   lines: Array<{
@@ -66,7 +69,7 @@ async function login(app: INestApplication, username: string): Promise<string> {
   return (res.body as LoginResponse).access_token;
 }
 
-const QUOTE_NUMBER_RE = /^\d{3}$/;
+const QUOTE_NUMBER_RE = /^QT-2026-\d{5}$/;
 
 describe('Quotes (e2e)', () => {
   let app: INestApplication;
@@ -361,7 +364,7 @@ describe('Quotes (e2e)', () => {
         .expect(409);
     });
 
-    it('should resend a revision_requested quote (revision_requested → sent)', async () => {
+    it('should reject re-sending a revision_requested quote (terminal state)', async () => {
       const created = (await createQuote().expect(201)).body as QuoteResponse;
       await request(app.getHttpServer())
         .post(`/api/v1/quotes/${created.id}/send`)
@@ -373,11 +376,10 @@ describe('Quotes (e2e)', () => {
         .send({ status: 'revision_requested' })
         .expect(200);
 
-      const resent = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post(`/api/v1/quotes/${created.id}/send`)
         .set('Authorization', `Bearer ${adminToken}`)
-        .expect(200);
-      expect((resent.body as QuoteResponse).status).toBe('sent');
+        .expect(409);
     });
   });
 
@@ -458,7 +460,7 @@ describe('Quotes (e2e)', () => {
         .expect(409);
     });
 
-    it('should allow editing a revision_requested quote', async () => {
+    it('should reject editing a revision_requested quote (revision only via create-revision)', async () => {
       const created = (await createQuote().expect(201)).body as QuoteResponse;
       await request(app.getHttpServer())
         .post(`/api/v1/quotes/${created.id}/send`)
@@ -474,7 +476,7 @@ describe('Quotes (e2e)', () => {
         .patch(`/api/v1/quotes/${created.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ objet: 'revised' })
-        .expect(200);
+        .expect(409);
     });
 
     it('should allow deleting a draft and reject deleting an accepted quote', async () => {
@@ -499,6 +501,191 @@ describe('Quotes (e2e)', () => {
         .delete(`/api/v1/quotes/${accepted.id}`)
         .set('Authorization', `Bearer ${commercialToken}`)
         .expect(409);
+    });
+  });
+
+  describe('POST /quotes/:id/create-revision', () => {
+    async function createRevisionRequestedQuote(
+      body: Record<string, unknown> = {},
+    ) {
+      const base = {
+        partnerId: customerId,
+        lines: [
+          { description: 'Item A', quantity: 2, unitPrice: 500 },
+          { description: 'Item B', quantity: 1, unitPrice: 300 },
+        ],
+      };
+      const created = (
+        await request(app.getHttpServer())
+          .post('/api/v1/quotes')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ ...base, ...body })
+          .expect(201)
+      ).body as QuoteResponse;
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${created.id}/send`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .patch(`/api/v1/quotes/${created.id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'revision_requested' })
+        .expect(200);
+      return (
+        await request(app.getHttpServer())
+          .get(`/api/v1/quotes/${created.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .expect(200)
+      ).body as QuoteResponse;
+    }
+
+    it('creates a brand new draft quote copying partner, lines, discount, objet and payment methods', async () => {
+      const original = await createRevisionRequestedQuote({
+        objet: 'Devis climatisation',
+        discountPercent: 10,
+        paymentMethods: [
+          { label: 'à la commande', percentage: 50 },
+          { label: 'solde à la livraison', percentage: 50 },
+        ],
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${original.id}/create-revision`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(201);
+
+      const revision = res.body as QuoteResponse;
+      expect(revision.id).not.toBe(original.id);
+      expect(revision.status).toBe('draft');
+      expect(revision.quoteNumber).toMatch(QUOTE_NUMBER_RE);
+      expect(revision.quoteNumber).not.toBe(original.quoteNumber);
+      expect(revision.partner.id).toBe(original.partner.id);
+      expect(revision.objet).toBe('Devis climatisation');
+      expect(revision.discountPercent).toBe('10.00');
+      expect(revision.discountAmount).toBe('130.00');
+      expect(revision.subtotal).toBe('1300.00');
+      expect(revision.tvaAmount).toBe('222.30');
+      expect(revision.totalAmount).toBe('1392.30');
+      expect(revision.paymentMethods).toEqual([
+        { label: 'à la commande', percentage: 50 },
+        { label: 'solde à la livraison', percentage: 50 },
+      ]);
+      expect(revision.lines).toHaveLength(2);
+      expect(revision.lines[0].description).toBe('Item A');
+      expect(revision.lines[0].quantity).toBe('2.000');
+      expect(revision.lines[0].unitPrice).toBe('500.000');
+      expect(revision.lines[1].description).toBe('Item B');
+      expect(revision.supersedesQuoteId).toBe(original.id);
+      expect(revision.supersedesQuote?.id).toBe(original.id);
+    });
+
+    it('keeps the original quote frozen: status and every field stay identical, and it exposes the new quote as its revision', async () => {
+      const original = await createRevisionRequestedQuote({
+        objet: 'Devis clim',
+        discountPercent: 15,
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${original.id}/create-revision`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(201);
+      const revision = res.body as QuoteResponse;
+
+      const frozen = (
+        await request(app.getHttpServer())
+          .get(`/api/v1/quotes/${original.id}`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .expect(200)
+      ).body as QuoteResponse;
+
+      expect(frozen.status).toBe('revision_requested');
+      expect(frozen.partner.id).toBe(original.partner.id);
+      expect(frozen.objet).toBe(original.objet);
+      expect(frozen.discountPercent).toBe(original.discountPercent);
+      expect(frozen.discountAmount).toBe(original.discountAmount);
+      expect(frozen.subtotal).toBe(original.subtotal);
+      expect(frozen.tvaAmount).toBe(original.tvaAmount);
+      expect(frozen.totalAmount).toBe(original.totalAmount);
+      expect(frozen.lines).toEqual(original.lines);
+      expect(frozen.createdAt).toBe(original.createdAt);
+      expect(frozen.updatedAt).toBe(original.updatedAt);
+      expect(frozen.revisions).toHaveLength(1);
+      expect(frozen.revisions[0].id).toBe(revision.id);
+      expect(frozen.revisions[0].quoteNumber).toBe(revision.quoteNumber);
+    });
+
+    it('rejects with 409 when the quote is not in revision_requested', async () => {
+      const draft = (await createQuote().expect(201)).body as QuoteResponse;
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${draft.id}/create-revision`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(409);
+
+      const sent = (await createQuote().expect(201)).body as QuoteResponse;
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${sent.id}/send`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${sent.id}/create-revision`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(409);
+
+      const accepted = (await createQuote().expect(201)).body as QuoteResponse;
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${accepted.id}/send`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .patch(`/api/v1/quotes/${accepted.id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'accepted' })
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${accepted.id}/create-revision`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(409);
+
+      const rejected = (await createQuote().expect(201)).body as QuoteResponse;
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${rejected.id}/send`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+      await request(app.getHttpServer())
+        .patch(`/api/v1/quotes/${rejected.id}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'rejected' })
+        .expect(200);
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${rejected.id}/create-revision`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(409);
+    });
+
+    it('returns 404 for a missing or malformed quote', async () => {
+      await request(app.getHttpServer())
+        .post(
+          '/api/v1/quotes/00000000-0000-4000-8000-000000000000/create-revision',
+        )
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .post('/api/v1/quotes/not-a-uuid/create-revision')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(404);
+    });
+
+    it('forbids purchasing and accountant users', async () => {
+      const original = await createRevisionRequestedQuote();
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${original.id}/create-revision`)
+        .set('Authorization', `Bearer ${purchasingToken}`)
+        .expect(403);
+      await request(app.getHttpServer())
+        .post(`/api/v1/quotes/${original.id}/create-revision`)
+        .set('Authorization', `Bearer ${accountantToken}`)
+        .expect(403);
     });
   });
 
