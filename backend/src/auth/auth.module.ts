@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -9,6 +9,9 @@ import { AuthService } from './auth.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtStrategy } from '../common/strategies/jwt.strategy';
 import { MailModule } from '../mail/mail.module';
+
+const jwtExpiresIn = (process.env.JWT_EXPIRES_IN ||
+  '8h') as JwtSignOptions['expiresIn'];
 
 const throttlerConfig =
   process.env.NODE_ENV === 'test'
@@ -30,7 +33,7 @@ const throttlerConfig =
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET || 'default-secret',
-      signOptions: { expiresIn: '8h' },
+      signOptions: { expiresIn: jwtExpiresIn },
     }),
   ],
   controllers: [AuthController],

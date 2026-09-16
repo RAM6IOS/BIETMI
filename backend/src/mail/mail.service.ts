@@ -5,11 +5,12 @@ import type { Transporter } from 'nodemailer';
 /**
  * MailService — wraps Nodemailer.
  *
- * In development / test: creates an Ethereal (fake SMTP) account automatically.
- * The preview URL for every sent message is logged so developers can inspect
- * emails without any real SMTP configuration.
+ * When SMTP_HOST is configured, real SMTP is used in every environment
+ * (production and development), so password-reset emails are deliverable
+ * even on a local machine.
  *
- * In production: expects SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS env vars.
+ * When SMTP_HOST is absent, falls back to an Ethereal (fake SMTP) account,
+ * whose preview URL is logged so developers can inspect sent emails.
  */
 @Injectable()
 export class MailService implements OnModuleInit {
@@ -25,11 +26,13 @@ export class MailService implements OnModuleInit {
   }
 
   async initTransporter(): Promise<void> {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const smtpHost = process.env.SMTP_HOST;
 
-    if (isProduction) {
+    if (smtpHost) {
+      // Real SMTP is used as soon as SMTP_HOST is provided — in development too,
+      // so password-reset emails are actually deliverable during local testing.
       this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
+        host: smtpHost,
         port: Number(process.env.SMTP_PORT ?? 587),
         secure: process.env.SMTP_SECURE === 'true',
         auth: {
@@ -37,31 +40,38 @@ export class MailService implements OnModuleInit {
           pass: process.env.SMTP_PASS,
         },
       });
-      this.logger.log('Mail transporter: production SMTP');
-    } else {
-      // Development: create a one-time Ethereal test account with fallback to jsonTransport if offline/timeout.
-      try {
-        const testAccount = await nodemailer.createTestAccount();
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.ethereal.email',
-          port: 587,
-          secure: false,
-          auth: {
-            user: testAccount.user,
-            pass: testAccount.pass,
-          },
-        });
-        this.logger.log(
-          `Mail transporter: Ethereal (${testAccount.user}) — emails are fake and captured at https://ethereal.email`,
-        );
-      } catch (err) {
-        this.logger.warn(
-          `Could not create Ethereal test account. Falling back to JSON transport: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        this.transporter = nodemailer.createTransport({
-          jsonTransport: true,
-        });
-      }
+      this.logger.log(`Mail transporter: SMTP (${smtpHost})`);
+      return;
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+      this.logger.warn(
+        'SMTP_HOST is not configured in production — password reset emails will NOT be delivered.',
+      );
+    }
+
+    // No SMTP configured: create a one-time Ethereal test account with fallback to jsonTransport if offline/timeout.
+    try {
+      const testAccount = await nodemailer.createTestAccount();
+      this.transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      this.logger.log(
+        `Mail transporter: Ethereal (${testAccount.user}) — emails are fake and captured at https://ethereal.email`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Could not create Ethereal test account. Falling back to JSON transport: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      this.transporter = nodemailer.createTransport({
+        jsonTransport: true,
+      });
     }
   }
 
@@ -71,11 +81,12 @@ export class MailService implements OnModuleInit {
       return;
     }
 
-    const info = await this.transporter.sendMail({
-      from: process.env.MAIL_FROM ?? '"BIETMI ERP" <noreply@bietmi.local>',
-      to,
-      subject: 'استعادة كلمة المرور / Réinitialisation du mot de passe',
-      html: `
+    try {
+      const info = await this.transporter.sendMail({
+        from: process.env.MAIL_FROM ?? '"BIETMI ERP" <noreply@bietmi.local>',
+        to,
+        subject: 'استعادة كلمة المرور / Réinitialisation du mot de passe',
+        html: `
         <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>استعادة كلمة المرور</h2>
           <p>لقد طلبت إعادة تعيين كلمة المرور لحسابك في نظام BIETMI ERP.</p>
@@ -97,15 +108,21 @@ export class MailService implements OnModuleInit {
           </p>
         </div>
       `,
-    });
+      });
 
-    // In development, log the Ethereal preview URL so the developer can
-    // inspect the email in their browser without any SMTP setup.
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    if (previewUrl) {
-      this.logger.log(`Password reset email sent. Preview: ${previewUrl}`);
-    } else {
-      this.logger.log(`Password reset email sent (JSON transport).`);
+      // In development, log the Ethereal preview URL so the developer can
+      // inspect the email in their browser without any SMTP setup.
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      if (previewUrl) {
+        this.logger.log(`Password reset email sent. Preview: ${previewUrl}`);
+      } else {
+        this.logger.log(`Password reset email sent (JSON transport).`);
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to send password reset email to ${to}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw err;
     }
   }
 }

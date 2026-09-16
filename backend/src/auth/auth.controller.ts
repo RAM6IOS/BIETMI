@@ -17,7 +17,7 @@ const LOGIN_THROTTLE = {
 };
 
 /**
- * Stricter throttle for forgot-password: 3 requests per 15 minutes per IP.
+ * Stricter throttle for forgot-password: 5 requests per 15 minutes per IP.
  * Rationale: this endpoint triggers an actual email to a third party.
  * Abuse would annoy real users (spam), not just the attacker.
  */
@@ -28,7 +28,7 @@ const FORGOT_PASSWORD_THROTTLE = {
   },
   forgotPassword: {
     ttl: 15 * 60 * 1000, // 15 minutes
-    limit: 3, // 3 attempts
+    limit: 5, // 5 attempts
   },
 };
 
