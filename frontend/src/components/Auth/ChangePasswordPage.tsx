@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { changeMyPassword } from '../../api/users';
 import { translateApiError } from '../../api/errors';
 import { Card } from '../ui/Card';
-import { Input } from '../ui/Input';
+import { PasswordInput } from '../ui/PasswordInput';
 import { Button } from '../ui/Button';
 import { Toast } from '../ui/Toast';
 
@@ -82,9 +82,8 @@ export function ChangePasswordPage() {
             <label htmlFor="current-password" className="block text-sm font-medium text-gray-900">
               {t('auth:currentPassword')}
             </label>
-            <Input
+            <PasswordInput
               id="current-password"
-              type="password"
               required
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
@@ -95,9 +94,8 @@ export function ChangePasswordPage() {
             <label htmlFor="new-password" className="block text-sm font-medium text-gray-900">
               {t('auth:newPassword')}
             </label>
-            <Input
+            <PasswordInput
               id="new-password"
-              type="password"
               required
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -108,9 +106,8 @@ export function ChangePasswordPage() {
             <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-900">
               {t('auth:confirmPassword')}
             </label>
-            <Input
+            <PasswordInput
               id="confirm-password"
-              type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

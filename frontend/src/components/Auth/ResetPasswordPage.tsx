@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { resetPassword } from '../../api/auth';
 import { Card } from '../ui/Card';
-import { Input } from '../ui/Input';
+import { PasswordInput } from '../ui/PasswordInput';
 import { Button } from '../ui/Button';
 
 export function ResetPasswordPage() {
@@ -141,10 +141,9 @@ export function ResetPasswordPage() {
               >
                 {t('auth:newPassword')}
               </label>
-              <Input
+              <PasswordInput
                 id="new-password"
                 name="newPassword"
-                type="password"
                 autoComplete="new-password"
                 required
                 value={newPassword}
@@ -160,10 +159,9 @@ export function ResetPasswordPage() {
               >
                 {t('auth:confirmPassword')}
               </label>
-              <Input
+              <PasswordInput
                 id="confirm-new-password"
                 name="confirmPassword"
-                type="password"
                 autoComplete="new-password"
                 required
                 value={confirmPassword}

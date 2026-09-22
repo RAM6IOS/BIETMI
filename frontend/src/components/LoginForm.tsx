@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/useAuth';
 import { Card } from './ui/Card';
 import { Input } from './ui/Input';
+import { PasswordInput } from './ui/PasswordInput';
 import { Button } from './ui/Button';
 import { API_BASE } from '../api/config';
 
@@ -78,10 +79,9 @@ export function LoginForm() {
             <label htmlFor="password" className="sr-only">
               {t('auth:password')}
             </label>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               required
               placeholder={t('auth:password')}
               value={password}

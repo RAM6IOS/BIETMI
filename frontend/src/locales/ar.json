@@ -36,6 +36,8 @@
     "systemName": "نظام BIETMI ERP",
     "username": "اسم المستخدم",
     "password": "كلمة المرور",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور",
     "loggingIn": "جاري تسجيل الدخول...",
     "login": "تسجيل الدخول",
     "invalidCredentials": "اسم المستخدم أو كلمة المرور غير صحيحة",
