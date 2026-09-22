@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SupplierCategoriesController } from './supplier-categories.controller';
 import { SupplierCategoriesService } from './supplier-categories.service';
+import { Workspace } from '@prisma/client';
+
+const user = { userId: 'u1', role: 'admin', workspace: Workspace.sandbox };
 
 function mockCategoriesService() {
   return {
@@ -33,34 +36,43 @@ describe('SupplierCategoriesController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('findAll delegates to service', async () => {
+  it('findAll passes workspace from current user', async () => {
     service.findAll.mockResolvedValue([]);
-    const result = await controller.findAll();
+    const result = await controller.findAll(user as never);
     expect(result).toEqual([]);
-    expect(service.findAll).toHaveBeenCalled();
+    expect(service.findAll).toHaveBeenCalledWith(Workspace.sandbox);
   });
 
-  it('create delegates to service', async () => {
+  it('create passes workspace from current user', async () => {
     const category = { id: '1', name: 'قطع غيار', createdAt: new Date() };
     service.create.mockResolvedValue(category);
-    const result = await controller.create({ name: 'قطع غيار' });
+    const result = await controller.create(user as never, { name: 'قطع غيار' });
     expect(result).toEqual(category);
-    expect(service.create).toHaveBeenCalledWith({ name: 'قطع غيار' });
+    expect(service.create).toHaveBeenCalledWith(
+      { name: 'قطع غيار' },
+      Workspace.sandbox,
+    );
   });
 
-  it('update delegates to service', async () => {
+  it('update passes workspace from current user', async () => {
     const updated = { id: '1', name: 'جديد', createdAt: new Date() };
     service.update.mockResolvedValue(updated);
-    const result = await controller.update('1', { name: 'جديد' });
+    const result = await controller.update(user as never, '1', {
+      name: 'جديد',
+    });
     expect(result).toEqual(updated);
-    expect(service.update).toHaveBeenCalledWith('1', { name: 'جديد' });
+    expect(service.update).toHaveBeenCalledWith(
+      '1',
+      { name: 'جديد' },
+      Workspace.sandbox,
+    );
   });
 
-  it('remove delegates to service', async () => {
+  it('remove passes workspace from current user', async () => {
     const deleted = { id: '1', name: 'x', createdAt: new Date() };
     service.remove.mockResolvedValue(deleted);
-    const result = await controller.remove('1');
+    const result = await controller.remove(user as never, '1');
     expect(result).toEqual(deleted);
-    expect(service.remove).toHaveBeenCalledWith('1');
+    expect(service.remove).toHaveBeenCalledWith('1', Workspace.sandbox);
   });
 });

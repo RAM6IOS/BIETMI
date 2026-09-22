@@ -22,6 +22,9 @@ export class CreateUserDto {
   role: Role;
 
   @IsOptional()
+  workspace?: never;
+
+  @IsOptional()
   @IsString()
   @MinLength(8, { message: 'كلمة المرور المؤقتة يجب ألا تقل عن 8 أحرف' })
   @MaxLength(128)

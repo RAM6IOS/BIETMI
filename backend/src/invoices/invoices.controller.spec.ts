@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Role } from '@prisma/client';
+import { Role, Workspace } from '@prisma/client';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 import { CurrencyInterceptor } from './currency.interceptor';
 
-const USER = { userId: 'user-id', role: Role.admin };
+const USER = {
+  userId: 'user-id',
+  role: Role.admin,
+  workspace: Workspace.production,
+};
 
 function mockInvoicesService() {
   return {

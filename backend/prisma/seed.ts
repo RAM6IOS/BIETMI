@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, Role, Workspace } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -25,6 +25,7 @@ async function main() {
       username: 'dev_test',
       passwordHash: devTestPasswordHash,
       role: Role.admin,
+      workspace: Workspace.sandbox,
       fullName: 'حساب اختبار تطوير',
     },
   });
@@ -43,6 +44,7 @@ async function main() {
       username: 'admin_bietmi',
       passwordHash: adminPasswordHash,
       role: Role.admin,
+      workspace: Workspace.production,
       fullName: 'المدير العام - BIETMI',
     },
   });
@@ -50,15 +52,29 @@ async function main() {
   console.log(`✅ Created admin_bietmi user: ${adminBietmiUser.username}`);
   console.log(`🔑 Password: ${adminPassword}`);
 
-  // Base supplier categories (idempotent — safe to re-run)
+  // Base supplier categories (idempotent — safe to re-run).
+  // Each workspace gets its own copy, so sandbox and production can
+  // evolve their category lists independently.
   const seedCategories = ['حديد', 'معدات', 'قطع غيار', 'مواد استهلاكية'];
-  for (const name of seedCategories) {
-    const category = await prisma.supplierCategory.upsert({
-      where: { name },
+  for (const workspace of [Workspace.sandbox, Workspace.production]) {
+    for (const name of seedCategories) {
+      const category = await prisma.supplierCategory.upsert({
+        where: { workspace_name: { workspace, name } },
+        update: {},
+        create: { name, workspace },
+      });
+      console.log(`✅ Supplier category ensured: ${name} (${workspace})`);
+    }
+  }
+
+  // Company profile is per-workspace (each root account has its own identity).
+  for (const workspace of [Workspace.sandbox, Workspace.production]) {
+    await prisma.company.upsert({
+      where: { workspace },
       update: {},
-      create: { name },
+      create: { workspace, name: 'EURL BIETMI PLUS' },
     });
-    console.log(`✅ Supplier category ensured: ${category.name}`);
+    console.log(`✅ Company profile ensured (${workspace})`);
   }
 
   console.log('\n🎉 Seeding complete!');

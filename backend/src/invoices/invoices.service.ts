@@ -4,7 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, InvoiceStatus, Role } from '@prisma/client';
+import { Prisma, InvoiceStatus, Role, Workspace } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -41,7 +41,7 @@ const INVOICE_INCLUDE = {
     },
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
 } as const;
 
 function parseDate(value?: string): Date | undefined {
@@ -72,12 +72,12 @@ export class InvoicesService {
     }
   }
 
-  private async validatePartner(partnerId: string) {
+  private async validatePartner(partnerId: string, workspace: Workspace) {
     const partner = await this.prisma.partner.findUnique({
-      where: { id: partnerId },
+      where: { id: partnerId, workspace },
     });
     if (!partner) {
-      throw new BadRequestException('الشريك المرتبط غير موجود');
+      throw new NotFoundException('الشريك المرتبط غير موجود');
     }
     if (partner.type !== 'customer') {
       throw new BadRequestException(`الفاتورة يجب أن ترتبط بـزبون`);
@@ -86,7 +86,7 @@ export class InvoicesService {
 
   async create(user: AuthUser, dto: CreateInvoiceDto) {
     this.assertCanWrite(user);
-    await this.validatePartner(dto.partnerId);
+    await this.validatePartner(dto.partnerId, user.workspace);
 
     const { computed, subtotal, discountAmount, tvaAmount, totalAmount } =
       computeTotals(dto.lines, dto.discountPercent ?? 0);
@@ -94,6 +94,7 @@ export class InvoicesService {
     return this.prisma.invoice.create({
       data: {
         partnerId: dto.partnerId,
+        workspace: user.workspace,
         createdByUserId: user.userId,
         issueDate: parseDate(dto.issueDate) ?? new Date(),
         dueDate: parseDate(dto.dueDate) ?? null,
@@ -128,7 +129,7 @@ export class InvoicesService {
 
     return this.prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
-        where: { id },
+        where: { id, workspace: user.workspace },
         include: { lines: true },
       });
 
@@ -149,9 +150,9 @@ export class InvoicesService {
 
       const rows = await tx.$queryRaw<
         Array<{ last_number: number }>
-      >`INSERT INTO "invoice_counters" ("id", "year", "last_number")
-        VALUES (${randomUUID()}::uuid, ${year}::int, 1)
-        ON CONFLICT ("year")
+      >`INSERT INTO "invoice_counters" ("id", "year", "workspace", "last_number")
+        VALUES (${randomUUID()}::uuid, ${year}::int, ${user.workspace}::"Workspace", 1)
+        ON CONFLICT ("workspace", "year")
         DO UPDATE SET "last_number" = "invoice_counters"."last_number" + 1
         RETURNING "last_number"`;
 
@@ -172,6 +173,7 @@ export class InvoicesService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.InvoiceWhereInput = {
+      workspace: user.workspace,
       ...(query.status ? { status: query.status } : {}),
       ...(query.search
         ? {
@@ -220,10 +222,10 @@ export class InvoicesService {
     };
   }
 
-  private async findScoped(id: string) {
+  private async findScoped(id: string, workspace: Workspace) {
     this.ensureValidId(id);
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id },
+      where: { id, workspace },
       include: INVOICE_INCLUDE,
     });
     if (!invoice) {
@@ -233,11 +235,11 @@ export class InvoicesService {
   }
 
   async findOne(user: AuthUser, id: string) {
-    return this.findScoped(id);
+    return this.findScoped(id, user.workspace);
   }
 
   async update(user: AuthUser, id: string, dto: UpdateInvoiceDto) {
-    const invoice = await this.findScoped(id);
+    const invoice = await this.findScoped(id, user.workspace);
     this.assertCanWrite(user);
 
     const canEdit = invoice.status === InvoiceStatus.draft;
@@ -264,7 +266,7 @@ export class InvoicesService {
     };
 
     if (dto.partnerId !== undefined) {
-      await this.validatePartner(dto.partnerId);
+      await this.validatePartner(dto.partnerId, user.workspace);
       data.partner = { connect: { id: dto.partnerId } };
     }
 
@@ -311,7 +313,7 @@ export class InvoicesService {
   }
 
   async remove(user: AuthUser, id: string) {
-    const invoice = await this.findScoped(id);
+    const invoice = await this.findScoped(id, user.workspace);
     this.assertCanWrite(user);
 
     if (invoice.status !== InvoiceStatus.draft) {
@@ -328,6 +330,7 @@ export class InvoicesService {
   async outstanding(user: AuthUser, overdueOnly = false) {
     const invoices = await this.prisma.invoice.findMany({
       where: {
+        workspace: user.workspace,
         status: {
           in: [
             InvoiceStatus.issued,

@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Role } from '@prisma/client';
+import { PurchaseOrderStatus, Role, Workspace } from '@prisma/client';
 import { PurchaseOrdersController } from './purchase-orders.controller';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CurrencyInterceptor } from '../invoices/currency.interceptor';
 
-const USER = { userId: 'user-id', role: Role.admin };
+const USER = {
+  userId: 'user-id',
+  role: Role.admin,
+  workspace: Workspace.production,
+};
 
 function mockPurchaseOrdersService() {
   return {
@@ -54,7 +58,7 @@ describe('PurchaseOrdersController', () => {
 
   it('findAll forwards the current user and query', async () => {
     service.findAll.mockResolvedValue({ data: [], meta: {} });
-    const query = { page: '1', status: 'draft' };
+    const query = { page: '1', status: PurchaseOrderStatus.draft };
     await controller.findAll(USER, query);
     expect(service.findAll).toHaveBeenCalledWith(USER, query);
   });

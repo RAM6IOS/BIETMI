@@ -8,7 +8,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role, Workspace } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 jest.mock('bcrypt');
@@ -16,15 +16,17 @@ jest.mock('bcrypt');
 const UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 const adminUser = {
-  id: UUID,
+  userId: UUID,
   username: 'admin',
   role: Role.admin,
+  workspace: Workspace.production,
 };
 
 const nonAdminUser = {
-  id: UUID,
+  userId: UUID,
   username: 'commercial1',
   role: Role.commercial,
+  workspace: Workspace.production,
 };
 
 type PublicUserRow = {
@@ -215,6 +217,53 @@ describe('UsersService', () => {
 
       expect(result.mustChangePassword).toBe(true);
     });
+
+    it('persists the caller workspace from the JWT, ignoring the request body', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed');
+      prisma.user.create.mockResolvedValue(
+        prismaPublicUserRow({ username: 'newcom' }),
+      );
+
+      const sandboxAdmin = {
+        userId: UUID,
+        username: 'sandboxboss',
+        role: Role.admin,
+        workspace: Workspace.sandbox,
+      };
+      await service.create(sandboxAdmin, {
+        fullName: 'New User',
+        username: 'newcom',
+        role: Role.commercial,
+        workspace: Workspace.production,
+      } as never);
+
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ workspace: Workspace.sandbox }),
+        }),
+      );
+    });
+
+    it('defaults workspace to the caller workspace when the body omits it', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed');
+      prisma.user.create.mockResolvedValue(
+        prismaPublicUserRow({ username: 'newcom' }),
+      );
+
+      await service.create(adminUser, {
+        fullName: 'New User',
+        username: 'newcom',
+        role: Role.commercial,
+      });
+
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ workspace: Workspace.production }),
+        }),
+      );
+    });
   });
 
   describe('findAll', () => {
@@ -239,8 +288,8 @@ describe('UsersService', () => {
       expect(result.data).toHaveLength(2);
       expect(result.meta.total).toBe(2);
       for (const row of result.data) {
-        expect(row.passwordHash).toBeUndefined();
-        expect(row.mustChangePassword).toBeUndefined();
+        expect(row).not.toHaveProperty('passwordHash');
+        expect(row).not.toHaveProperty('mustChangePassword');
       }
     });
 
@@ -255,6 +304,25 @@ describe('UsersService', () => {
           where: expect.objectContaining({
             OR: expect.any(Array),
           }),
+        }),
+      );
+    });
+
+    it('scopes the list to the caller workspace', async () => {
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.user.count.mockResolvedValue(0);
+
+      await service.findAll(adminUser, {});
+
+      const scopedWhere = { workspace: Workspace.production };
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining(scopedWhere),
+        }),
+      );
+      expect(prisma.user.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining(scopedWhere),
         }),
       );
     });
@@ -298,6 +366,34 @@ describe('UsersService', () => {
       expect(result).toHaveProperty('isActive', false);
       expect(result).not.toHaveProperty('passwordHash');
     });
+
+    it('never changes the workspace of an existing user', async () => {
+      prisma.user.findUnique.mockResolvedValue(prismaUserRow());
+      prisma.user.update.mockResolvedValue(prismaPublicUserRow());
+
+      await service.update(adminUser, UUID, {
+        workspace: Workspace.sandbox,
+      } as never);
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: UUID },
+        data: {},
+        select: expect.any(Object),
+      });
+    });
+
+    it('scopes the existence check to the caller workspace', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.update(adminUser, UUID, { fullName: 'x' }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: UUID, workspace: Workspace.production },
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('resetUserPassword', () => {
@@ -336,9 +432,28 @@ describe('UsersService', () => {
       expect(result).toEqual({ tempPassword, mustChangePassword: true });
       expect(result).not.toHaveProperty('passwordHash');
     });
+
+    it('scopes the target lookup to the caller workspace', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.resetUserPassword(adminUser, UUID)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: UUID, workspace: Workspace.production },
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('remove', () => {
+    const otherAdmin = {
+      userId: 'e5f6f7e5-f6f7-8901-abcd-ef1234567890',
+      username: 'admin2',
+      role: Role.admin,
+      workspace: Workspace.production,
+    };
     const userRowWithCount = (
       overrides: {
         role?: Role;
@@ -376,7 +491,12 @@ describe('UsersService', () => {
 
     it('throws BadRequestException when admin deletes their own account', async () => {
       prisma.user.findUnique.mockResolvedValue(userRowWithCount());
-      const selfAdmin = { userId: UUID, username: 'admin', role: Role.admin };
+      const selfAdmin = {
+        userId: UUID,
+        username: 'admin',
+        role: Role.admin,
+        workspace: Workspace.production,
+      };
       await expect(service.remove(selfAdmin, UUID)).rejects.toThrow(
         BadRequestException,
       );
@@ -388,7 +508,7 @@ describe('UsersService', () => {
         userRowWithCount({ role: Role.admin }),
       );
       prisma.user.count.mockResolvedValue(1);
-      await expect(service.remove(adminUser, UUID)).rejects.toThrow(
+      await expect(service.remove(otherAdmin, UUID)).rejects.toThrow(
         ConflictException,
       );
       expect(prisma.user.delete).not.toHaveBeenCalled();
@@ -400,7 +520,7 @@ describe('UsersService', () => {
       );
       prisma.user.count.mockResolvedValue(2);
       prisma.user.delete.mockResolvedValue({ id: UUID });
-      const result = await service.remove(adminUser, UUID);
+      const result = await service.remove(otherAdmin, UUID);
       expect(result).toEqual({ id: UUID, deleted: true });
       expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: UUID } });
     });
@@ -415,7 +535,7 @@ describe('UsersService', () => {
           },
         }),
       );
-      await expect(service.remove(adminUser, UUID)).rejects.toThrow(
+      await expect(service.remove(otherAdmin, UUID)).rejects.toThrow(
         ConflictException,
       );
       expect(prisma.user.delete).not.toHaveBeenCalled();
@@ -424,9 +544,69 @@ describe('UsersService', () => {
     it('deletes a user with no linked documents', async () => {
       prisma.user.findUnique.mockResolvedValue(userRowWithCount());
       prisma.user.delete.mockResolvedValue({ id: UUID });
-      const result = await service.remove(adminUser, UUID);
+      const result = await service.remove(otherAdmin, UUID);
       expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: UUID } });
       expect(result).toEqual({ id: UUID, deleted: true });
+    });
+
+    it('scopes the target lookup to the caller workspace', async () => {
+      prisma.user.findUnique.mockResolvedValue(userRowWithCount());
+      prisma.user.delete.mockResolvedValue({ id: UUID });
+
+      await service.remove(otherAdmin, UUID);
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: UUID, workspace: Workspace.production },
+        }),
+      );
+    });
+
+    it('returns NotFound for a user in another workspace', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.remove(otherAdmin, UUID)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('filters linked-document counts by the caller workspace', async () => {
+      prisma.user.findUnique.mockResolvedValue(userRowWithCount());
+      prisma.user.delete.mockResolvedValue({ id: UUID });
+
+      await service.remove(otherAdmin, UUID);
+
+      const select =
+        prisma.user.findUnique.mock.calls[0][0].include._count.select;
+      expect(select.createdInvoices).toEqual({
+        where: { workspace: Workspace.production },
+      });
+      expect(select.createdQuotes).toEqual({
+        where: { workspace: Workspace.production },
+      });
+      expect(select.createdPurchaseOrders).toEqual({
+        where: { workspace: Workspace.production },
+      });
+    });
+
+    it('scopes the last-admin guard to the caller workspace', async () => {
+      prisma.user.findUnique.mockResolvedValue(
+        userRowWithCount({ role: Role.admin }),
+      );
+      prisma.user.count.mockResolvedValue(1);
+
+      await expect(service.remove(otherAdmin, UUID)).rejects.toThrow(
+        ConflictException,
+      );
+
+      expect(prisma.user.count).toHaveBeenCalledWith({
+        where: {
+          role: Role.admin,
+          isActive: true,
+          workspace: Workspace.production,
+        },
+      });
     });
   });
 
@@ -435,6 +615,7 @@ describe('UsersService', () => {
       userId: UUID,
       username: 'commercial1',
       role: Role.commercial,
+      workspace: Workspace.production,
     };
 
     it('throws BadRequestException when current password is wrong', async () => {

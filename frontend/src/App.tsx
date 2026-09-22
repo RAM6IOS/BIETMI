@@ -134,7 +134,15 @@ function DashboardLayout() {
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refreshMe } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void refreshMe();
+    const onFocus = () => void refreshMe();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [isAuthenticated, refreshMe]);
 
   if (!isAuthenticated) {
     return (

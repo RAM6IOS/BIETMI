@@ -1,44 +1,42 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { Workspace, type Company } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyDto } from './dto/update-company.dto';
-import type { Company } from '@prisma/client';
 
-const COMPANY_ID = '00000000-0000-4000-8000-000000000001';
+const DEFAULT_NAME = 'EURL BIETMI PLUS';
 
-const DEFAULT_ROW = {
-  id: COMPANY_ID,
-  name: 'EURL BIETMI PLUS',
-  logoUrl: null,
-  siegeSocial: null,
-  mobile: null,
-  telFax: null,
-  rc: null,
-  nif: null,
-  ain: null,
-  banqueBaraka: null,
-};
+function defaultRow(workspace: Workspace) {
+  return {
+    id: randomUUID(),
+    workspace,
+    name: DEFAULT_NAME,
+    logoUrl: null,
+    siegeSocial: null,
+    mobile: null,
+    telFax: null,
+    rc: null,
+    nif: null,
+    ain: null,
+    banqueBaraka: null,
+  };
+}
 
 @Injectable()
 export class CompanyService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(): Promise<Company> {
+  async get(workspace: Workspace): Promise<Company> {
     const existing = await this.prisma.company.findUnique({
-      where: { id: COMPANY_ID },
+      where: { workspace },
     });
     if (existing) return existing;
 
-    const hasAny = await this.prisma.company.count();
-    if (hasAny > 0) {
-      const first = await this.prisma.company.findFirst();
-      if (first) return first;
-    }
-
-    return this.prisma.company.create({ data: DEFAULT_ROW });
+    return this.prisma.company.create({ data: defaultRow(workspace) });
   }
 
-  async update(dto: UpdateCompanyDto): Promise<Company> {
-    const current = await this.get();
+  async update(workspace: Workspace, dto: UpdateCompanyDto): Promise<Company> {
+    const current = await this.get(workspace);
     return this.prisma.company.update({
       where: { id: current.id },
       data: dto,

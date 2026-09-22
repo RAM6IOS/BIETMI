@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PartnerType, Prisma, PurchaseOrderStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import {
+  PartnerType,
+  Prisma,
+  PurchaseOrderStatus,
+  Workspace,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { ListPurchaseOrdersDto } from './dto/list-purchase-orders.dto';
@@ -15,12 +21,10 @@ import { normalizePaymentMethods } from '../common/payment-methods';
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const COUNTER_ID = '00000000-0000-4000-8000-000000000000';
-
 const PURCHASE_ORDER_INCLUDE = {
   supplier: { select: { id: true, name: true, type: true, nif: true } },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
 } as const;
 
 function parseDate(value?: string): Date | undefined {
@@ -42,12 +46,12 @@ export class PurchaseOrdersService {
     }
   }
 
-  private async validateSupplier(supplierId: string) {
+  private async validateSupplier(supplierId: string, workspace: Workspace) {
     const partner = await this.prisma.partner.findUnique({
-      where: { id: supplierId },
+      where: { id: supplierId, workspace },
     });
     if (!partner) {
-      throw new BadRequestException('المورد المرتبط غير موجود');
+      throw new NotFoundException('المورد المرتبط غير موجود');
     }
     if (partner.type !== PartnerType.supplier) {
       throw new BadRequestException('طلب الشراء يجب أن يرتبط بمورد');
@@ -55,7 +59,7 @@ export class PurchaseOrdersService {
   }
 
   async create(user: AuthUser, dto: CreatePurchaseOrderDto) {
-    await this.validateSupplier(dto.supplierId);
+    await this.validateSupplier(dto.supplierId, user.workspace);
 
     const { computed, subtotal, discountAmount, tvaAmount, totalAmount } =
       computeTotals(dto.lines, dto.discountPercent ?? 0);
@@ -63,9 +67,9 @@ export class PurchaseOrdersService {
     return this.prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<
         Array<{ last_number: number }>
-      >`INSERT INTO "purchase_order_counters" ("id", "last_number")
-        VALUES (${COUNTER_ID}::uuid, 1)
-        ON CONFLICT ("id")
+      >`INSERT INTO "purchase_order_counters" ("id", "workspace", "last_number")
+        VALUES (${randomUUID()}::uuid, ${user.workspace}::"Workspace", 1)
+        ON CONFLICT ("workspace")
         DO UPDATE SET "last_number" = "purchase_order_counters"."last_number" + 1
         RETURNING "last_number"`;
 
@@ -75,6 +79,7 @@ export class PurchaseOrdersService {
       return tx.purchaseOrder.create({
         data: {
           orderNumber,
+          workspace: user.workspace,
           supplierId: dto.supplierId,
           createdByUserId: user.userId,
           orderDate: parseDate(dto.orderDate) ?? new Date(),
@@ -109,6 +114,7 @@ export class PurchaseOrdersService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.PurchaseOrderWhereInput = {
+      workspace: user.workspace,
       ...(query.status ? { status: query.status } : {}),
       ...(query.search
         ? {
@@ -154,7 +160,7 @@ export class PurchaseOrdersService {
   async findOne(user: AuthUser, id: string) {
     this.ensureValidId(id);
     const order = await this.prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id, workspace: user.workspace },
       include: PURCHASE_ORDER_INCLUDE,
     });
     if (!order) {
@@ -166,7 +172,7 @@ export class PurchaseOrdersService {
   async send(user: AuthUser, id: string) {
     this.ensureValidId(id);
     const order = await this.prisma.purchaseOrder.findUnique({
-      where: { id },
+      where: { id, workspace: user.workspace },
     });
     if (!order) {
       throw new NotFoundException('طلب الشراء غير موجود');

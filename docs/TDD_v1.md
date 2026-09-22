@@ -146,7 +146,7 @@ id (PK), contractNumber (unique), type (sale/purchase), partnerId (FK), createdB
 
 ### 5.5 User (المستخدمون)
 
-id (PK), username (unique), passwordHash, role (enum: admin/commercial/purchasing/accountant), fullName, isActive, createdAt.
+id (PK), username (unique), passwordHash, role (enum: admin/commercial/purchasing/accountant), fullName, isActive, createdAt, **workspace** (enum: `production` / `sandbox` — افتراضي `production`).
 
 ### 5.6 مخطط العلاقات المختصر
 
@@ -161,6 +161,8 @@ User    (1) ──< (N) Invoice   [createdByUserId]
 User    (1) ──< (N) Contract  [createdByUserId]
 User    (1) ──< (N) Quote     [createdByUserId]
 ```
+
+**ملاحظة عزل Workspace**: الكيانات الرئيسية (Partner, SupplierCategory, Invoice, Quote, PurchaseOrder, InvoiceCounter, QuoteCounter, PurchaseOrderCounter) تحمل `workspace Workspace @default(production)` — لا يظهر في مخطط العلاقات لأن العلاقة المضمونة فريدة لكل `workspace` عبر القيود الفريدة متعددة الأعمدة (§5.9).
 
 ### 5.7 SupplierCategory (تصنيفات الموردين) — علاقة Many-to-Many
 
@@ -200,6 +202,30 @@ revision_requested ──[POST /quotes/:id/create-revision فقط]──> نسخ
 - `POST /quotes/:id/create-revision` ينسخ إلى عرض جديد بحالة `draft`: partnerId + objet + discountPercent + paymentMethods + بنود العرض، مع ترقيم تسلسلي جديد، و`supersedesQuoteId` = الأصل. **لا تُكتب أي حقل على الأصل** (يبقى مجمّداً تماماً، حتى `updatedAt`)، ويُرفض بـ 409 إذا لم تكن حالة الأصل `revision_requested`.
 - العلاقة الذاتية تُمكّن الواجهة من عرض روابط «نسخة معدَّلة من…» (supersedesQuote) و«استُبدِل بـ…» (revisions).
 - `PATCH /quotes/:id` و`POST /quotes/:id/send` مقتصران على `draft` فقط؛ `GET` متاحة لصلاحيات `admin`+`commercial`، والكتابة مثلها.
+
+### 5.9 عزل البيانات حسب Workspace — الكيان/'
+
+كل كيان رئيسي يحمل حقل `workspace Workspace @default(production)` — مصفوفة `Workspace` التي تقبل قيمتين فقط: `production` (شركة BIETMI المشتركة) و`sandbox` (مساحة العمل الشخصية لكل مستخدم).
+
+**الكيانات التي تحمل `workspace`**: User, Partner, SupplierCategory, Invoice, InvoiceCounter, Quote, QuoteLine, QuoteCounter, PurchaseOrder, PurchaseOrderCounter.
+
+**القيود الفريدة** متعددة الأعمدة وتتضمن `workspace` لضمان عدم تعارض الأرقام التسلسلية عبر المساحات:
+- `@@unique([workspace, nif])` — على Partner
+- `@@unique([workspace, name])` — على SupplierCategory
+- `@@unique([workspace, invoiceNumber])` — على Invoice
+- `@@unique([workspace, year])` — على InvoiceCounter وQuoteCounter
+- `@@unique([workspace, quoteNumber])` — على Quote
+- `@@unique([workspace, orderNumber])` — على PurchaseOrder
+- `@@unique([workspace])` — على PurchaseOrderCounter
+
+**منطق العزل في الخادم**:
+- JWT يحمل `workspace` من المستخدم الحالي — لا يُقبل من الـ Body.
+- كل استعلام `findMany`/`findUnique`/`update`/`delete` يضيف `where: { ...filter, workspace }`.
+- كل `create` يضبط `data: { ...body, workspace: user.workspace }`.
+- مسارات POST (إنشاء) تتجاوز الحقل المُرسل في Body إن وُجد (حماية "Body Leak").
+- الوصول العكسي عبر معرف معروف (`partnerId` مثلاً) يُرفض بـ **404** إذا لم يكن الكيان في نفس الـ workspace — مهما كان نوع الخطأ (شريك غير موجود أو من نوع مختلف).
+
+**Backfill**: Migration `20260916000000_add_workspace_isolation` يضبط `workspace = 'production'` لكل السجلات القديمة — لا توجد بيانات sandbox في الإنتاج.
 
 ## 6. سياسة العمل مع وكيل الذكاء الاصطناعي في كتابة الكود
 
@@ -268,6 +294,7 @@ revision_requested ──[POST /quotes/:id/create-revision فقط]──> نسخ
 | 12 | ترقيم عروض الأسعار بصيغة `QT-YYYY-XXXXX` (سنة + لاحق 5 خانات) بعدّاد سنوي `QuoteCounter` منفصل لكل سنة — نفس نمط عدّاد الفواتير (موثَّق بالقسم 5.8). | معتمد |
 | 13 | **مراجعة عروض الأسعار عبر نسخ جديدة فقط (Default-on-Revision)**: `revision_requested` حالة نهائية مجمَّدة للأصل (لا تعديل `PATCH` ولا إعادة إرسال — رفض 409)، وإنشاء نسخة معدَّلة حصرياً عبر `POST /quotes/:id/create-revision` مع `supersedesQuoteId` (علاقة ذاتية غير فريدة). **يُلغي القرار السابق** الذي كان يسمح بـ `PATCH` وإعادة الإرسال من `revision_requested` — الإلغاء بناءً على ملاحظة BIETMI الفعلية. موثَّق بالقسم 5.8. | معتمد — يلغي القرار السابق |
 | 14 | **PWA أساسي — تثبيت كتطبيق فقط (Installability)**: `manifest.json` + Service Worker أساسي في `frontend/public/` يخزّن الملفات الثابتة فقط (الأيقونات، CSS/JS المبني، واجهة shell). **لا** أي cache لأي طلب `/api/*` — بيانات الفواتير/العروض/الزبائن/العقود تتطلب اتصالاً فعلياً بالخادم دائماً. اسم المانيفست عربي ثابت («نظام BIETMI ERP») لأن الـ Web App Manifest لا يدعم أسماء متعددة اللغات. العمل دون اتصال الحقيقي يبقى مؤجَّلاً حصرياً للمرحلة 3 (الفنيون الميدانيون) — توضيح إلزامي في القسم 2.4. | معتمد — نُفِّذ |
+| 15 | **عزل Workspace — نموذج الشركة (Company-as-isolation)**: كل كيان رئيسي يحمل حقل `workspace` (enum `production` / `sandbox`) افتراضي `production`. الـ workspace يُustak من JWT فقط ولا يُقبل من الـ Body. القيود الفريدة متعددة الأعمدة وتتضمن `workspace` (عدّادات، أرقام تسلسلية). الوصول العكسي عبر معرف معروف (شريك مثلاً) يُرفض 404 إذا لم يكن في نفس الـ workspace — مهما كان نوع الخطأ. **لا** عزل مستخدمين فرديين (per-user) ولا Multi-tenancy كامل. موثَّق بالتفصيل في القسم 5.9. | معتمد — نُفِّذ |
 
 ## 9. الوثائق المرجعية المرتبطة
 

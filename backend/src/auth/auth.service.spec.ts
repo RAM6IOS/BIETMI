@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service';
 import { UnauthorizedException } from '@nestjs/common';
+import { Workspace } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -174,6 +175,53 @@ describe('AuthService', () => {
         userId: user.id,
         role: user.role,
       });
+    });
+  });
+
+  // ─────────────────────────── getMe ────────────────────────────────────
+
+  describe('getMe', () => {
+    const authUser = {
+      userId: 'u1',
+      role: 'commercial' as const,
+      workspace: 'production' as const,
+    };
+
+    it('returns the live user profile without exposing passwordHash or other secrets', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        username: 'ali',
+        fullName: 'Ali Ben',
+        role: 'commercial',
+        workspace: Workspace.production,
+        isActive: true,
+        mustChangePassword: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        passwordHash: '$2b$12$sensitive-hash',
+      });
+
+      const result = await service.getMe(authUser);
+
+      expect(result).toMatchObject({
+        id: 'u1',
+        username: 'ali',
+        fullName: 'Ali Ben',
+        role: 'commercial',
+        workspace: Workspace.production,
+        isActive: true,
+        mustChangePassword: false,
+      });
+      // Security: the API must never echo the password hash.
+      expect(result).not.toHaveProperty('passwordHash');
+    });
+
+    it('throws UnauthorizedException when the user no longer exists', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.getMe(authUser)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 

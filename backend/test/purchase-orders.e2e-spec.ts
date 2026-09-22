@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import * as bcrypt from 'bcrypt';
 import { AppModule } from '../src/app.module';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 interface LoginResponse {
@@ -38,8 +39,8 @@ async function createUser(
   const passwordHash = await bcrypt.hash('testpassword', 12);
   await prisma.user.upsert({
     where: { username },
-    update: { role },
-    create: { username, passwordHash, role, fullName: username },
+    update: { role: role as Role },
+    create: { username, passwordHash, role: role as Role, fullName: username },
   });
 }
 
@@ -238,7 +239,7 @@ describe('PurchaseOrders (e2e)', () => {
         supplierId: '00000000-0000-4000-8000-000000000000',
         lines: [{ description: 'A', quantity: 1, unitPrice: 10 }],
       })
-      .expect(400);
+      .expect(404);
   });
 
   it('lists purchase orders with pagination metadata', async () => {

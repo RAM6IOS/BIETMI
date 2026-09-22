@@ -2,7 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CustomersController } from './customers.controller';
 import { SuppliersController } from './suppliers.controller';
 import { PartnersService } from './partners.service';
-import { PartnerType } from '@prisma/client';
+import { PartnerCurrency, PartnerType, Workspace } from '@prisma/client';
+
+const user = { userId: 'u1', role: 'admin', workspace: Workspace.sandbox };
 
 function mockPartnersService() {
   return {
@@ -31,40 +33,57 @@ describe('CustomersController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('create passes PartnerType.customer', async () => {
+  it('create passes workspace from current user', async () => {
     service.create.mockResolvedValue({ id: '1' });
     const dto = { name: 'Test' };
-    await controller.create(dto);
-    expect(service.create).toHaveBeenCalledWith(dto, PartnerType.customer);
+    await controller.create(user as never, dto);
+    expect(service.create).toHaveBeenCalledWith(
+      dto,
+      PartnerType.customer,
+      Workspace.sandbox,
+    );
   });
 
-  it('findAll passes PartnerType.customer', async () => {
+  it('findAll passes workspace from current user', async () => {
     service.findAll.mockResolvedValue({ data: [], meta: {} });
     const query = { page: '1' };
-    await controller.findAll(query);
-    expect(service.findAll).toHaveBeenCalledWith(query, PartnerType.customer);
+    await controller.findAll(user as never, query);
+    expect(service.findAll).toHaveBeenCalledWith(
+      query,
+      PartnerType.customer,
+      Workspace.sandbox,
+    );
   });
 
-  it('findOne passes PartnerType.customer', async () => {
+  it('findOne passes workspace from current user', async () => {
     service.findOne.mockResolvedValue({ id: '1' });
-    await controller.findOne('1');
-    expect(service.findOne).toHaveBeenCalledWith('1', PartnerType.customer);
+    await controller.findOne(user as never, '1');
+    expect(service.findOne).toHaveBeenCalledWith(
+      '1',
+      PartnerType.customer,
+      Workspace.sandbox,
+    );
   });
 
-  it('update passes PartnerType.customer', async () => {
+  it('update passes workspace from current user', async () => {
     service.update.mockResolvedValue({ id: '1' });
-    await controller.update('1', { name: 'X' });
+    await controller.update(user as never, '1', { name: 'X' });
     expect(service.update).toHaveBeenCalledWith(
       '1',
       { name: 'X' },
       PartnerType.customer,
+      Workspace.sandbox,
     );
   });
 
-  it('remove passes PartnerType.customer', async () => {
+  it('remove passes workspace from current user', async () => {
     service.remove.mockResolvedValue({ id: '1' });
-    await controller.remove('1');
-    expect(service.remove).toHaveBeenCalledWith('1', PartnerType.customer);
+    await controller.remove(user as never, '1');
+    expect(service.remove).toHaveBeenCalledWith(
+      '1',
+      PartnerType.customer,
+      Workspace.sandbox,
+    );
   });
 });
 
@@ -86,39 +105,60 @@ describe('SuppliersController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('create passes PartnerType.supplier', async () => {
+  it('create passes workspace from current user', async () => {
     service.create.mockResolvedValue({ id: '1' });
-    const dto = { name: 'DEMAG', paymentTerms: '60 يوم', currency: 'FOREIGN' };
-    await controller.create(dto);
-    expect(service.create).toHaveBeenCalledWith(dto, PartnerType.supplier);
+    const dto = {
+      name: 'DEMAG',
+      paymentTerms: '60 يوم',
+      currency: PartnerCurrency.FOREIGN,
+    };
+    await controller.create(user as never, dto);
+    expect(service.create).toHaveBeenCalledWith(
+      dto,
+      PartnerType.supplier,
+      Workspace.sandbox,
+    );
   });
 
-  it('findAll passes PartnerType.supplier', async () => {
+  it('findAll passes workspace from current user', async () => {
     service.findAll.mockResolvedValue({ data: [], meta: {} });
     const query = { page: '1', search: 'demag' };
-    await controller.findAll(query);
-    expect(service.findAll).toHaveBeenCalledWith(query, PartnerType.supplier);
+    await controller.findAll(user as never, query);
+    expect(service.findAll).toHaveBeenCalledWith(
+      query,
+      PartnerType.supplier,
+      Workspace.sandbox,
+    );
   });
 
-  it('findOne passes PartnerType.supplier', async () => {
+  it('findOne passes workspace from current user', async () => {
     service.findOne.mockResolvedValue({ id: '1' });
-    await controller.findOne('1');
-    expect(service.findOne).toHaveBeenCalledWith('1', PartnerType.supplier);
+    await controller.findOne(user as never, '1');
+    expect(service.findOne).toHaveBeenCalledWith(
+      '1',
+      PartnerType.supplier,
+      Workspace.sandbox,
+    );
   });
 
-  it('update passes PartnerType.supplier', async () => {
+  it('update passes workspace from current user', async () => {
     service.update.mockResolvedValue({ id: '1' });
-    await controller.update('1', { currency: 'DZD' });
+    await controller.update(user as never, '1', { currency: 'DZD' });
     expect(service.update).toHaveBeenCalledWith(
       '1',
       { currency: 'DZD' },
       PartnerType.supplier,
+      Workspace.sandbox,
     );
   });
 
-  it('remove passes PartnerType.supplier', async () => {
+  it('remove passes workspace from current user', async () => {
     service.remove.mockResolvedValue({ id: '1' });
-    await controller.remove('1');
-    expect(service.remove).toHaveBeenCalledWith('1', PartnerType.supplier);
+    await controller.remove(user as never, '1');
+    expect(service.remove).toHaveBeenCalledWith(
+      '1',
+      PartnerType.supplier,
+      Workspace.sandbox,
+    );
   });
 });

@@ -44,4 +44,7 @@ export class CreatePartnerDto {
   @IsUUID('4', { each: true })
   @IsOptional()
   categoryIds?: string[];
+
+  @IsOptional()
+  workspace?: never;
 }

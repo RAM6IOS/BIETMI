@@ -5,7 +5,13 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, QuoteStatus, InvoiceStatus, Role } from '@prisma/client';
+import {
+  Prisma,
+  QuoteStatus,
+  InvoiceStatus,
+  Role,
+  Workspace,
+} from '@prisma/client';
 import { QuotesService } from './quotes.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,10 +19,12 @@ const UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const PARTNER_ID = '11111111-2222-3333-4444-555555555555';
 const USER_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-const ADMIN = { userId: USER_ID, role: Role.admin };
-const COMMERCIAL = { userId: USER_ID, role: Role.commercial };
-const PURCHASING = { userId: USER_ID, role: Role.purchasing };
-const ACCOUNTANT = { userId: USER_ID, role: Role.accountant };
+const workspace = Workspace.sandbox;
+
+const ADMIN = { userId: USER_ID, role: Role.admin, workspace };
+const COMMERCIAL = { userId: USER_ID, role: Role.commercial, workspace };
+const PURCHASING = { userId: USER_ID, role: Role.purchasing, workspace };
+const ACCOUNTANT = { userId: USER_ID, role: Role.accountant, workspace };
 
 const QUOTE_INCLUDE = {
   partner: {
@@ -38,7 +46,7 @@ const QUOTE_INCLUDE = {
     },
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
   supersedesQuote: { select: { id: true, quoteNumber: true, status: true } },
   revisions: { select: { id: true, quoteNumber: true, status: true } },
 } as const;
@@ -63,7 +71,7 @@ const INVOICE_INCLUDE = {
     },
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
 } as const;
 
 function stdLine(overrides: { quantity?: number; unitPrice?: number } = {}) {
@@ -122,7 +130,7 @@ describe('QuotesService', () => {
         quote: { create: jest.fn() },
       };
       prisma.$transaction.mockImplementation(
-        async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+        async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       );
       return tx;
     }
@@ -150,6 +158,7 @@ describe('QuotesService', () => {
         data: {
           quoteNumber: 'QT-2026-00001',
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           objet: null,
           status: QuoteStatus.draft,
@@ -201,6 +210,7 @@ describe('QuotesService', () => {
         data: {
           quoteNumber: 'QT-2026-00021',
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           objet: null,
           status: QuoteStatus.draft,
@@ -263,6 +273,7 @@ describe('QuotesService', () => {
         data: {
           quoteNumber: 'QT-2026-00003',
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           objet: null,
           status: QuoteStatus.draft,
@@ -271,7 +282,8 @@ describe('QuotesService', () => {
           discountAmount: new Prisma.Decimal('100.00'),
           tvaAmount: new Prisma.Decimal('171'),
           totalAmount: new Prisma.Decimal('1071'),
-          paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+          paymentMethods: [{ label: '50% à la commande', percentage: 100 }] as
+            { label: string; percentage: number }[] | null,
           lines: {
             create: [
               {
@@ -308,7 +320,7 @@ describe('QuotesService', () => {
           partnerId: PARTNER_ID,
           lines: [stdLine()],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should forbid purchasing from creating any quote', async () => {
@@ -341,7 +353,7 @@ describe('QuotesService', () => {
       });
 
       expect(prisma.quote.findMany).toHaveBeenCalledWith({
-        where: {},
+        where: { workspace },
         include: QUOTE_INCLUDE,
         orderBy: { createdAt: 'desc' },
         skip: 5,
@@ -362,7 +374,7 @@ describe('QuotesService', () => {
       await service.findAll(ADMIN, { status: QuoteStatus.sent });
 
       expect(prisma.quote.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { status: 'sent' } }),
+        expect.objectContaining({ where: { status: 'sent', workspace } }),
       );
     });
   });
@@ -379,7 +391,7 @@ describe('QuotesService', () => {
       const result = await service.findOne(COMMERCIAL, UUID);
       expect(result.id).toBe(UUID);
       expect(prisma.quote.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID },
+        where: { id: UUID, workspace },
         include: QUOTE_INCLUDE,
       });
     });
@@ -586,7 +598,7 @@ describe('QuotesService', () => {
         quote: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
       };
       prisma.$transaction.mockImplementation(
-        async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+        async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       );
       return tx;
     }
@@ -604,7 +616,8 @@ describe('QuotesService', () => {
         subtotal: new Prisma.Decimal('1000'),
         tvaAmount: new Prisma.Decimal('171'),
         totalAmount: new Prisma.Decimal('1071'),
-        paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+        paymentMethods: [{ label: '50% à la commande', percentage: 100 }] as
+          { label: string; percentage: number }[] | null,
         lines: [
           {
             id: 'l1',
@@ -634,7 +647,7 @@ describe('QuotesService', () => {
       const result = await service.createRevision(COMMERCIAL, UUID);
 
       expect(tx.quote.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID },
+        where: { id: UUID, workspace },
         include: { lines: true },
       });
       expect(tx.quote.update).not.toHaveBeenCalled();
@@ -642,6 +655,7 @@ describe('QuotesService', () => {
         data: {
           quoteNumber: 'QT-2026-00002',
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           objet: 'Devis clim',
           status: QuoteStatus.draft,
@@ -650,7 +664,8 @@ describe('QuotesService', () => {
           discountAmount: new Prisma.Decimal('100.00'),
           tvaAmount: new Prisma.Decimal('171'),
           totalAmount: new Prisma.Decimal('1071'),
-          paymentMethods: [{ label: '50% à la commande', percentage: 100 }],
+          paymentMethods: [{ label: '50% à la commande', percentage: 100 }] as
+            { label: string; percentage: number }[] | null,
           supersedesQuoteId: UUID,
           lines: {
             create: [
@@ -683,6 +698,7 @@ describe('QuotesService', () => {
         data: {
           quoteNumber: 'QT-2026-00004',
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           objet: 'Devis clim',
           status: QuoteStatus.draft,
@@ -781,7 +797,7 @@ describe('QuotesService', () => {
         invoice: { create: jest.fn(), findUnique: jest.fn() },
       };
       prisma.$transaction.mockImplementation(
-        async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+        async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       );
       return tx;
     }
@@ -825,6 +841,7 @@ describe('QuotesService', () => {
       expect(tx.invoice.create).toHaveBeenCalledWith({
         data: {
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           objet: 'Devis clim',
           status: InvoiceStatus.draft,
@@ -853,7 +870,7 @@ describe('QuotesService', () => {
         where: { id: UUID },
         data: { convertedToInvoiceId: 'invoice-1' },
       });
-      expect(result.id).toBe('invoice-1');
+      expect(result?.id).toBe('invoice-1');
     });
 
     it('should return the existing invoice on a second call (idempotent)', async () => {
@@ -872,7 +889,7 @@ describe('QuotesService', () => {
       const result = await service.convertToInvoice(ADMIN, UUID);
 
       expect(tx.invoice.create).not.toHaveBeenCalled();
-      expect(result.id).toBe('invoice-1');
+      expect(result?.id).toBe('invoice-1');
     });
 
     it('should reject converting a non-accepted quote', async () => {

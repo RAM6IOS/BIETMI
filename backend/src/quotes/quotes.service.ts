@@ -5,7 +5,13 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Prisma, QuoteStatus, InvoiceStatus, Role } from '@prisma/client';
+import {
+  Prisma,
+  QuoteStatus,
+  InvoiceStatus,
+  Role,
+  Workspace,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
@@ -42,7 +48,7 @@ const QUOTE_INCLUDE = {
     },
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
   supersedesQuote: { select: { id: true, quoteNumber: true, status: true } },
   revisions: { select: { id: true, quoteNumber: true, status: true } },
 } as const;
@@ -67,7 +73,7 @@ const INVOICE_INCLUDE = {
     },
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
 } as const;
 
 @Injectable()
@@ -89,22 +95,22 @@ export class QuotesService {
     }
   }
 
-  private async validatePartner(partnerId: string) {
+  private async validatePartner(partnerId: string, workspace: Workspace) {
     const partner = await this.prisma.partner.findUnique({
-      where: { id: partnerId },
+      where: { id: partnerId, workspace },
     });
     if (!partner) {
-      throw new BadRequestException('الشريك المرتبط غير موجود');
+      throw new NotFoundException('الشريك المرتبط غير موجود');
     }
     if (partner.type !== 'customer') {
       throw new BadRequestException('عرض السعر يجب أن يرتبط بـزبون');
     }
   }
 
-  private async findScoped(id: string) {
+  private async findScoped(id: string, workspace: Workspace) {
     this.ensureValidId(id);
     const quote = await this.prisma.quote.findUnique({
-      where: { id },
+      where: { id, workspace },
       include: QUOTE_INCLUDE,
     });
     if (!quote) {
@@ -115,7 +121,7 @@ export class QuotesService {
 
   async create(user: AuthUser, dto: CreateQuoteDto) {
     this.assertCanWrite(user);
-    await this.validatePartner(dto.partnerId);
+    await this.validatePartner(dto.partnerId, user.workspace);
 
     const { computed, subtotal, discountAmount, tvaAmount, totalAmount } =
       computeTotals(dto.lines, dto.discountPercent ?? 0);
@@ -125,9 +131,9 @@ export class QuotesService {
 
       const rows = await tx.$queryRaw<
         Array<{ last_number: number }>
-      >`INSERT INTO "quote_counters" ("id", "year", "last_number")
-        VALUES (${randomUUID()}::uuid, ${year}::int, 1)
-        ON CONFLICT ("year")
+      >`INSERT INTO "quote_counters" ("id", "year", "workspace", "last_number")
+        VALUES (${randomUUID()}::uuid, ${year}::int, ${user.workspace}::"Workspace", 1)
+        ON CONFLICT ("workspace", "year")
         DO UPDATE SET "last_number" = "quote_counters"."last_number" + 1
         RETURNING "last_number"`;
 
@@ -137,6 +143,7 @@ export class QuotesService {
       return tx.quote.create({
         data: {
           quoteNumber,
+          workspace: user.workspace,
           partnerId: dto.partnerId,
           createdByUserId: user.userId,
           objet: dto.objet ?? null,
@@ -171,6 +178,7 @@ export class QuotesService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.QuoteWhereInput = {
+      workspace: user.workspace,
       ...(query.status ? { status: query.status } : {}),
       ...(query.search
         ? {
@@ -214,14 +222,16 @@ export class QuotesService {
   }
 
   async findOne(user: AuthUser, id: string) {
-    return this.findScoped(id);
+    return this.findScoped(id, user.workspace);
   }
 
   async send(user: AuthUser, id: string) {
     this.ensureValidId(id);
     this.assertCanWrite(user);
 
-    const quote = await this.prisma.quote.findUnique({ where: { id } });
+    const quote = await this.prisma.quote.findUnique({
+      where: { id, workspace: user.workspace },
+    });
     if (!quote) {
       throw new NotFoundException('عرض السعر غير موجود');
     }
@@ -243,7 +253,9 @@ export class QuotesService {
     this.ensureValidId(id);
     this.assertCanWrite(user);
 
-    const quote = await this.prisma.quote.findUnique({ where: { id } });
+    const quote = await this.prisma.quote.findUnique({
+      where: { id, workspace: user.workspace },
+    });
     if (!quote) {
       throw new NotFoundException('عرض السعر غير موجود');
     }
@@ -260,7 +272,7 @@ export class QuotesService {
   }
 
   async update(user: AuthUser, id: string, dto: UpdateQuoteDto) {
-    const quote = await this.findScoped(id);
+    const quote = await this.findScoped(id, user.workspace);
     this.assertCanWrite(user);
 
     const canEdit = quote.status === QuoteStatus.draft;
@@ -277,7 +289,7 @@ export class QuotesService {
     };
 
     if (dto.partnerId !== undefined) {
-      await this.validatePartner(dto.partnerId);
+      await this.validatePartner(dto.partnerId, user.workspace);
       data.partner = { connect: { id: dto.partnerId } };
     }
 
@@ -329,7 +341,7 @@ export class QuotesService {
 
     return this.prisma.$transaction(async (tx) => {
       const quote = await tx.quote.findUnique({
-        where: { id },
+        where: { id, workspace: user.workspace },
         include: { lines: true },
       });
       if (!quote) {
@@ -346,9 +358,9 @@ export class QuotesService {
       const year = new Date().getFullYear();
       const rows = await tx.$queryRaw<
         Array<{ last_number: number }>
-      >`INSERT INTO "quote_counters" ("id", "year", "last_number")
-        VALUES (${randomUUID()}::uuid, ${year}::int, 1)
-        ON CONFLICT ("year")
+      >`INSERT INTO "quote_counters" ("id", "year", "workspace", "last_number")
+        VALUES (${randomUUID()}::uuid, ${year}::int, ${user.workspace}::"Workspace", 1)
+        ON CONFLICT ("workspace", "year")
         DO UPDATE SET "last_number" = "quote_counters"."last_number" + 1
         RETURNING "last_number"`;
 
@@ -372,6 +384,7 @@ export class QuotesService {
       return tx.quote.create({
         data: {
           quoteNumber,
+          workspace: user.workspace,
           partnerId: quote.partnerId,
           createdByUserId: user.userId,
           objet: quote.objet,
@@ -401,7 +414,7 @@ export class QuotesService {
   }
 
   async remove(user: AuthUser, id: string) {
-    const quote = await this.findScoped(id);
+    const quote = await this.findScoped(id, user.workspace);
     this.assertCanWrite(user);
 
     if (quote.status !== QuoteStatus.draft) {
@@ -421,7 +434,7 @@ export class QuotesService {
 
     return this.prisma.$transaction(async (tx) => {
       const quote = await tx.quote.findUnique({
-        where: { id },
+        where: { id, workspace: user.workspace },
         include: { lines: true },
       });
       if (!quote) {
@@ -444,6 +457,7 @@ export class QuotesService {
       const invoice = await tx.invoice.create({
         data: {
           partnerId: quote.partnerId,
+          workspace: user.workspace,
           createdByUserId: user.userId,
           objet: quote.objet,
           status: InvoiceStatus.draft,

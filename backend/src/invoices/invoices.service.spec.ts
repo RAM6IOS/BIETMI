@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, InvoiceStatus, Role } from '@prisma/client';
+import { Prisma, InvoiceStatus, Role, Workspace } from '@prisma/client';
 import { InvoicesService } from './invoices.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,10 +12,12 @@ const UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const PARTNER_ID = '11111111-2222-3333-4444-555555555555';
 const USER_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-const ADMIN = { userId: USER_ID, role: Role.admin };
-const COMMERCIAL = { userId: USER_ID, role: Role.commercial };
-const PURCHASING = { userId: USER_ID, role: Role.purchasing };
-const ACCOUNTANT = { userId: USER_ID, role: Role.accountant };
+const workspace = Workspace.sandbox;
+
+const ADMIN = { userId: USER_ID, role: Role.admin, workspace };
+const COMMERCIAL = { userId: USER_ID, role: Role.commercial, workspace };
+const PURCHASING = { userId: USER_ID, role: Role.purchasing, workspace };
+const ACCOUNTANT = { userId: USER_ID, role: Role.accountant, workspace };
 
 const INVOICE_INCLUDE = {
   partner: {
@@ -37,7 +39,7 @@ const INVOICE_INCLUDE = {
     },
   },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' } },
+  lines: true,
 };
 
 describe('InvoicesService', () => {
@@ -105,6 +107,7 @@ describe('InvoicesService', () => {
       expect(prisma.invoice.create).toHaveBeenCalledWith({
         data: {
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           issueDate: new Date('2026-01-15'),
           dueDate: new Date('2026-02-15'),
@@ -160,6 +163,7 @@ describe('InvoicesService', () => {
       expect(prisma.invoice.create).toHaveBeenCalledWith({
         data: {
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           issueDate: new Date('2026-01-15'),
           dueDate: null,
@@ -244,6 +248,7 @@ describe('InvoicesService', () => {
       expect(prisma.invoice.create).toHaveBeenCalledWith({
         data: {
           partnerId: PARTNER_ID,
+          workspace,
           createdByUserId: USER_ID,
           issueDate: new Date('2026-01-15'),
           dueDate: new Date('2026-02-15'),
@@ -297,7 +302,7 @@ describe('InvoicesService', () => {
         $queryRaw: jest.fn(),
       };
       prisma.$transaction.mockImplementation(
-        async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+        async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       );
       return tx;
     }
@@ -363,7 +368,7 @@ describe('InvoicesService', () => {
       await service.findAll(COMMERCIAL, {});
 
       expect(prisma.invoice.findMany).toHaveBeenCalledWith({
-        where: {},
+        where: { workspace },
         include: INVOICE_INCLUDE,
         orderBy: { createdAt: 'desc' },
         skip: 0,
@@ -378,7 +383,7 @@ describe('InvoicesService', () => {
       await service.findAll(ADMIN, { status: InvoiceStatus.issued });
 
       expect(prisma.invoice.findMany).toHaveBeenCalledWith({
-        where: { status: 'issued' },
+        where: { status: 'issued', workspace },
         include: INVOICE_INCLUDE,
         orderBy: { createdAt: 'desc' },
         skip: 0,
@@ -520,7 +525,10 @@ describe('InvoicesService', () => {
       const result = await service.outstanding(ADMIN);
 
       expect(prisma.invoice.findMany).toHaveBeenCalledWith({
-        where: { status: { in: ['issued', 'partially_paid', 'overdue'] } },
+        where: {
+          status: { in: ['issued', 'partially_paid', 'overdue'] },
+          workspace,
+        },
         include: INVOICE_INCLUDE,
         orderBy: { dueDate: 'asc' },
       });

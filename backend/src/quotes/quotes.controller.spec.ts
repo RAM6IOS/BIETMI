@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Role } from '@prisma/client';
+import { QuoteStatus, Role, Workspace } from '@prisma/client';
 import { QuotesController } from './quotes.controller';
 import { QuotesService } from './quotes.service';
 import { CurrencyInterceptor } from '../invoices/currency.interceptor';
 
-const USER = { userId: 'user-id', role: Role.admin };
+const USER = {
+  userId: 'user-id',
+  role: Role.admin,
+  workspace: Workspace.production,
+};
 
 function mockQuotesService() {
   return {
@@ -85,7 +89,7 @@ describe('QuotesController', () => {
 
   it('updateStatus forwards the current user, id and dto', async () => {
     service.updateStatus.mockResolvedValue({ id: '1' });
-    const dto = { status: 'accepted' };
+    const dto = { status: QuoteStatus.accepted };
     await controller.updateStatus(USER, 'quote-1', dto);
     expect(service.updateStatus).toHaveBeenCalledWith(USER, 'quote-1', dto);
   });

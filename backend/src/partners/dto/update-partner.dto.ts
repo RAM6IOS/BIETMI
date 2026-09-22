@@ -50,4 +50,7 @@ export class UpdatePartnerDto {
   @IsUUID('4', { each: true })
   @IsOptional()
   categoryIds?: string[];
+
+  @IsOptional()
+  workspace?: never;
 }

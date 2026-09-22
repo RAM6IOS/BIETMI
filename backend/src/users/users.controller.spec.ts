@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { Role } from '@prisma/client';
+import { Role, Workspace } from '@prisma/client';
 
 const currentUser = {
   userId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   role: Role.admin,
+  workspace: Workspace.production,
 };
 
 describe('UsersController', () => {
@@ -43,7 +44,11 @@ describe('UsersController', () => {
   });
 
   it('create delegates to service with current user and dto', async () => {
-    const dto = { fullName: 'X', username: 'u', role: Role.commercial };
+    const dto = {
+      fullName: 'X',
+      username: 'u',
+      role: Role.commercial,
+    };
     service.create.mockResolvedValue({ id: '1' });
 
     await controller.create(currentUser, dto);

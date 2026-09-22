@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PartnersService } from './partners.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { PartnerType } from '@prisma/client';
+import { PartnerCurrency, PartnerType, Workspace } from '@prisma/client';
 
 const UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const UUID3 = 'c3d4e5f6-a7b8-9012-cdef-123456789012';
@@ -17,6 +17,9 @@ describe('PartnersService', () => {
       update: jest.Mock;
       count: jest.Mock;
     };
+    supplierCategory: {
+      findMany: jest.Mock;
+    };
   };
 
   beforeEach(async () => {
@@ -27,6 +30,9 @@ describe('PartnersService', () => {
         findUnique: jest.fn(),
         update: jest.fn(),
         count: jest.fn(),
+      },
+      supplierCategory: {
+        findMany: jest.fn(),
       },
     };
 
@@ -51,7 +57,7 @@ describe('PartnersService', () => {
         name: 'DEMAG',
         nif: '987654321',
         paymentTerms: '60 يوم',
-        currency: 'FOREIGN',
+        currency: PartnerCurrency.FOREIGN,
         contacts: [{ name: 'Contact 1', phone: '123456' }],
       };
 
@@ -70,7 +76,11 @@ describe('PartnersService', () => {
 
       prisma.partner.create.mockResolvedValue(expected);
 
-      const result = await service.create(dto, PartnerType.supplier);
+      const result = await service.create(
+        dto,
+        PartnerType.supplier,
+        Workspace.sandbox,
+      );
 
       expect(result).toEqual(expected);
       expect(prisma.partner.create).toHaveBeenCalledWith({
@@ -79,6 +89,7 @@ describe('PartnersService', () => {
           nif: '987654321',
           paymentTerms: '60 يوم',
           type: 'supplier',
+          workspace: Workspace.sandbox,
           currency: 'FOREIGN',
           categories: undefined,
           contacts: {
@@ -104,12 +115,13 @@ describe('PartnersService', () => {
 
       prisma.partner.create.mockResolvedValue({ id: UUID, name: 'Cevital' });
 
-      await service.create(dto, PartnerType.customer);
+      await service.create(dto, PartnerType.customer, Workspace.sandbox);
 
       expect(prisma.partner.create).toHaveBeenCalledWith({
         data: {
           name: 'Cevital',
           type: 'customer',
+          workspace: Workspace.sandbox,
           currency: 'DZD',
           categories: undefined,
           contacts: undefined,
@@ -129,6 +141,7 @@ describe('PartnersService', () => {
       const result = await service.findAll(
         { page: '1', limit: '20', sortBy: 'createdAt', sortOrder: 'desc' },
         PartnerType.supplier,
+        Workspace.sandbox,
       );
 
       expect(result).toEqual({
@@ -136,7 +149,11 @@ describe('PartnersService', () => {
         meta: { total: 0, page: 1, limit: 20, totalPages: 0 },
       });
       expect(prisma.partner.findMany).toHaveBeenCalledWith({
-        where: { type: 'supplier', isActive: true },
+        where: {
+          type: 'supplier',
+          isActive: true,
+          workspace: Workspace.sandbox,
+        },
         include: expect.objectContaining({
           categories: { select: { id: true, name: true } },
         }),
@@ -153,12 +170,14 @@ describe('PartnersService', () => {
       await service.findAll(
         { search: 'demag', page: '1', limit: '20' },
         PartnerType.supplier,
+        Workspace.sandbox,
       );
 
       expect(prisma.partner.findMany).toHaveBeenCalledWith({
         where: {
           type: 'supplier',
           isActive: true,
+          workspace: Workspace.sandbox,
           OR: [
             { name: { contains: 'demag', mode: 'insensitive' } },
             { nif: { contains: 'demag', mode: 'insensitive' } },
@@ -181,11 +200,15 @@ describe('PartnersService', () => {
     it('should return a supplier by id + type', async () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
 
-      const result = await service.findOne(UUID, PartnerType.supplier);
+      const result = await service.findOne(
+        UUID,
+        PartnerType.supplier,
+        Workspace.sandbox,
+      );
 
       expect(result).toEqual({ id: UUID });
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID, type: 'supplier' },
+        where: { id: UUID, type: 'supplier', workspace: Workspace.sandbox },
         include: expect.objectContaining({
           categories: { select: { id: true, name: true } },
         }),
@@ -194,24 +217,24 @@ describe('PartnersService', () => {
 
     it('should throw NotFoundException for invalid UUID', async () => {
       await expect(
-        service.findOne('nonexistent', PartnerType.supplier),
+        service.findOne('nonexistent', PartnerType.supplier, Workspace.sandbox),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw NotFoundException if not found', async () => {
       prisma.partner.findUnique.mockResolvedValue(null);
       await expect(
-        service.findOne(UUID3, PartnerType.supplier),
+        service.findOne(UUID3, PartnerType.supplier, Workspace.sandbox),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should include purchaseOrders with narrowed fields, newest first', async () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
 
-      await service.findOne(UUID, PartnerType.supplier);
+      await service.findOne(UUID, PartnerType.supplier, Workspace.sandbox);
 
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID, type: 'supplier' },
+        where: { id: UUID, type: 'supplier', workspace: Workspace.sandbox },
         include: expect.objectContaining({
           categories: { select: { id: true, name: true } },
         }),
@@ -221,10 +244,10 @@ describe('PartnersService', () => {
     it('should include invoices with narrowed fields, newest issueDate first', async () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
 
-      await service.findOne(UUID, PartnerType.customer);
+      await service.findOne(UUID, PartnerType.customer, Workspace.sandbox);
 
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID, type: 'customer' },
+        where: { id: UUID, type: 'customer', workspace: Workspace.sandbox },
         include: expect.objectContaining({
           categories: { select: { id: true, name: true } },
         }),
@@ -234,10 +257,10 @@ describe('PartnersService', () => {
     it('should include quotes with narrowed fields, newest createdAt first', async () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
 
-      await service.findOne(UUID, PartnerType.customer);
+      await service.findOne(UUID, PartnerType.customer, Workspace.sandbox);
 
       expect(prisma.partner.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID, type: 'customer' },
+        where: { id: UUID, type: 'customer', workspace: Workspace.sandbox },
         include: expect.objectContaining({
           quotes: {
             select: {
@@ -265,6 +288,7 @@ describe('PartnersService', () => {
         UUID,
         { paymentTerms: '30 يوم', currency: 'FOREIGN' },
         PartnerType.supplier,
+        Workspace.sandbox,
       );
 
       expect(result).toEqual({ id: UUID, name: 'DEMAG' });
@@ -285,7 +309,12 @@ describe('PartnersService', () => {
     it('should throw NotFoundException if supplier not found', async () => {
       prisma.partner.findUnique.mockResolvedValue(null);
       await expect(
-        service.update(UUID3, { name: 'X' }, PartnerType.supplier),
+        service.update(
+          UUID3,
+          { name: 'X' },
+          PartnerType.supplier,
+          Workspace.sandbox,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -295,7 +324,11 @@ describe('PartnersService', () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID, invoices: [] });
       prisma.partner.update.mockResolvedValue({ id: UUID, isActive: false });
 
-      const result = await service.remove(UUID, PartnerType.supplier);
+      const result = await service.remove(
+        UUID,
+        PartnerType.supplier,
+        Workspace.sandbox,
+      );
 
       expect(result).toEqual({ id: UUID, isActive: false });
     });
@@ -306,14 +339,14 @@ describe('PartnersService', () => {
         invoices: [{ id: UUID3 }],
       });
 
-      await expect(service.remove(UUID, PartnerType.supplier)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.remove(UUID, PartnerType.supplier, Workspace.sandbox),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('should throw NotFoundException for invalid UUID', async () => {
       await expect(
-        service.remove('nonexistent', PartnerType.supplier),
+        service.remove('nonexistent', PartnerType.supplier, Workspace.sandbox),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -327,6 +360,10 @@ describe('PartnersService', () => {
         categoryIds: [UUID, CAT_UUID],
       };
 
+      prisma.supplierCategory.findMany.mockResolvedValue([
+        { id: UUID },
+        { id: CAT_UUID },
+      ]);
       prisma.partner.create.mockResolvedValue({
         id: UUID3,
         name: 'DEMAG',
@@ -336,7 +373,11 @@ describe('PartnersService', () => {
         ],
       });
 
-      const result = await service.create(dto, PartnerType.supplier);
+      const result = await service.create(
+        dto,
+        PartnerType.supplier,
+        Workspace.sandbox,
+      );
 
       expect(result).toBeDefined();
       expect(prisma.partner.create).toHaveBeenCalledWith({
@@ -360,7 +401,7 @@ describe('PartnersService', () => {
         name: 'Cevital',
       });
 
-      await service.create(dto, PartnerType.supplier);
+      await service.create(dto, PartnerType.supplier, Workspace.sandbox);
 
       expect(prisma.partner.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -374,6 +415,7 @@ describe('PartnersService', () => {
     });
 
     it('update with categoryIds replaces categories', async () => {
+      prisma.supplierCategory.findMany.mockResolvedValue([{ id: CAT_UUID }]);
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
       prisma.partner.update.mockResolvedValue({ id: UUID });
 
@@ -381,6 +423,7 @@ describe('PartnersService', () => {
         UUID,
         { categoryIds: [CAT_UUID] },
         PartnerType.supplier,
+        Workspace.sandbox,
       );
 
       expect(prisma.partner.update).toHaveBeenCalledWith({
@@ -400,7 +443,12 @@ describe('PartnersService', () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
       prisma.partner.update.mockResolvedValue({ id: UUID });
 
-      await service.update(UUID, { name: 'X' }, PartnerType.supplier);
+      await service.update(
+        UUID,
+        { name: 'X' },
+        PartnerType.supplier,
+        Workspace.sandbox,
+      );
 
       expect(prisma.partner.update).toHaveBeenCalledWith({
         where: { id: UUID },
@@ -420,6 +468,7 @@ describe('PartnersService', () => {
       await service.findAll(
         { categoryId: UUID, page: '1', limit: '20' },
         PartnerType.supplier,
+        Workspace.sandbox,
       );
 
       expect(prisma.partner.findMany).toHaveBeenCalledWith(
@@ -438,6 +487,7 @@ describe('PartnersService', () => {
       await service.findAll(
         { categoryId: `${UUID},${CAT_UUID}`, page: '1', limit: '20' },
         PartnerType.supplier,
+        Workspace.sandbox,
       );
 
       expect(prisma.partner.findMany).toHaveBeenCalledWith(
@@ -454,7 +504,7 @@ describe('PartnersService', () => {
     it('findOne includes categories', async () => {
       prisma.partner.findUnique.mockResolvedValue({ id: UUID });
 
-      await service.findOne(UUID, PartnerType.supplier);
+      await service.findOne(UUID, PartnerType.supplier, Workspace.sandbox);
 
       expect(prisma.partner.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { PartnerType, PartnerCurrency } from '@prisma/client';
+import { PartnerType, PartnerCurrency, Workspace } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { conflictWithCode } from '../common/errors/app-errors';
 import { CreatePartnerDto } from './dto/create-partner.dto';
@@ -76,24 +76,58 @@ export class PartnersService {
     return PARTNER_NAMES[type];
   }
 
-  private async ensureExists(id: string, type: PartnerType) {
+  private async ensureExists(
+    id: string,
+    type: PartnerType,
+    workspace: Workspace,
+  ) {
     if (!UUID_REGEX.test(id)) {
       throw new NotFoundException(`${this.partnerName(type)} ${id} غير موجود`);
     }
-    const existing = await this.prisma.partner.findUnique({ where: { id } });
+    const existing = await this.prisma.partner.findUnique({
+      where: { id, workspace },
+    });
     if (!existing) {
       throw new NotFoundException(`${this.partnerName(type)} ${id} غير موجود`);
     }
   }
 
-  async create(createPartnerDto: CreatePartnerDto, type: PartnerType) {
-    const { contacts, currency, categoryIds, ...partnerData } =
-      createPartnerDto;
+  private async ensureCategoryWorkspace(
+    categoryIds: string[],
+    workspace: Workspace,
+  ) {
+    const found = await this.prisma.supplierCategory.findMany({
+      where: { id: { in: categoryIds }, workspace },
+      select: { id: true },
+    });
+    if (found.length !== categoryIds.length) {
+      throw new NotFoundException('التصنيف غير موجود');
+    }
+  }
+
+  async create(
+    createPartnerDto: CreatePartnerDto,
+    type: PartnerType,
+    workspace: Workspace,
+  ) {
+    const {
+      contacts,
+      currency,
+      categoryIds,
+      workspace: _ws,
+      ...partnerData
+    } = createPartnerDto;
+    void _ws;
+
+    if (categoryIds && categoryIds.length > 0) {
+      await this.ensureCategoryWorkspace(categoryIds, workspace);
+    }
 
     try {
       return await this.prisma.partner.create({
         data: {
           ...partnerData,
+          workspace,
           type,
           currency: currency ?? PartnerCurrency.DZD,
           contacts: contacts
@@ -133,7 +167,11 @@ export class PartnersService {
     }
   }
 
-  async findAll(query: ListPartnersDto, type: PartnerType) {
+  async findAll(
+    query: ListPartnersDto,
+    type: PartnerType,
+    workspace: Workspace,
+  ) {
     const page = parseInt(query.page ?? '1', 10);
     const limit = parseInt(query.limit ?? '20', 10);
     const skip = (page - 1) * limit;
@@ -153,6 +191,7 @@ export class PartnersService {
     const where = {
       type,
       isActive: true,
+      workspace,
       ...categoryFilter,
       ...(query.search
         ? {
@@ -198,13 +237,13 @@ export class PartnersService {
     };
   }
 
-  async findOne(id: string, type: PartnerType) {
+  async findOne(id: string, type: PartnerType, workspace: Workspace) {
     if (!UUID_REGEX.test(id)) {
       throw new NotFoundException(`${this.partnerName(type)} ${id} غير موجود`);
     }
 
     const partner = await this.prisma.partner.findUnique({
-      where: { id, type },
+      where: { id, type, workspace },
       include: PARTNER_INCLUDE,
     });
 
@@ -219,10 +258,21 @@ export class PartnersService {
     id: string,
     updatePartnerDto: UpdatePartnerDto,
     type: PartnerType,
+    workspace: Workspace,
   ) {
-    await this.ensureExists(id, type);
+    await this.ensureExists(id, type, workspace);
 
-    const { contacts, categoryIds, ...partnerData } = updatePartnerDto;
+    const {
+      contacts,
+      categoryIds,
+      workspace: _ws,
+      ...partnerData
+    } = updatePartnerDto;
+    void _ws;
+
+    if (categoryIds && categoryIds.length > 0) {
+      await this.ensureCategoryWorkspace(categoryIds, workspace);
+    }
 
     try {
       return await this.prisma.partner.update({
@@ -255,13 +305,13 @@ export class PartnersService {
     }
   }
 
-  async remove(id: string, type: PartnerType) {
+  async remove(id: string, type: PartnerType, workspace: Workspace) {
     if (!UUID_REGEX.test(id)) {
       throw new NotFoundException(`${this.partnerName(type)} ${id} غير موجود`);
     }
 
     const partner = await this.prisma.partner.findUnique({
-      where: { id, type },
+      where: { id, type, workspace },
       include: { invoices: true },
     });
 

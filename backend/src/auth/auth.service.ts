@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -6,8 +6,21 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { LoginDto } from './dto/login.dto';
 import { unauthorizedWithCode } from '../common/errors/app-errors';
+import type { AuthUser } from '../common/decorators/current-user.decorator';
 
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+// Public profile fields only — passwordHash and other secrets are excluded.
+const ME_SELECT = {
+  id: true,
+  username: true,
+  fullName: true,
+  role: true,
+  workspace: true,
+  isActive: true,
+  mustChangePassword: true,
+  createdAt: true,
+} as const;
 
 /** Compute SHA-256 hex digest of a raw token string. */
 function hashToken(rawToken: string): string {
@@ -56,10 +69,43 @@ export class AuthService {
       );
     }
 
-    const payload = { userId: user.id, role: user.role };
+    const payload = {
+      userId: user.id,
+      role: user.role,
+      workspace: user.workspace,
+    };
 
     return {
       access_token: this.jwtService.sign(payload),
+    };
+  }
+
+  /**
+   * Returns the caller's live profile.
+   *
+   * Security: only an allowlist of public fields is selected, and the
+   * response object is rebuilt from that allowlist — so passwordHash or any
+   * other secret can never leak, even if the select grows later.
+   */
+  async getMe(user: AuthUser) {
+    const profile = await this.prisma.user.findUnique({
+      where: { id: user.userId },
+      select: ME_SELECT,
+    });
+
+    if (!profile) {
+      throw new UnauthorizedException('الجلسة غير صالحة أو انتهت صلاحيتها');
+    }
+
+    return {
+      id: profile.id,
+      username: profile.username,
+      fullName: profile.fullName,
+      role: profile.role,
+      workspace: profile.workspace,
+      isActive: profile.isActive,
+      mustChangePassword: profile.mustChangePassword,
+      createdAt: profile.createdAt,
     };
   }
 

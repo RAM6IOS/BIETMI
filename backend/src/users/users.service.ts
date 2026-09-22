@@ -30,6 +30,7 @@ const USER_PUBLIC_SELECT = {
   username: true,
   fullName: true,
   role: true,
+  workspace: true,
   isActive: true,
   createdAt: true,
 } as const;
@@ -66,6 +67,7 @@ export class UsersService {
         username: dto.username,
         fullName: dto.fullName,
         role: dto.role,
+        workspace: user.workspace,
         passwordHash,
         mustChangePassword: true,
       },
@@ -82,14 +84,19 @@ export class UsersService {
     const limit = parseInt(query.limit ?? '20', 10);
     const search = query.search?.trim();
 
-    const where = search
-      ? {
-          OR: [
-            { username: { contains: search, mode: 'insensitive' as const } },
-            { fullName: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
+    const where = {
+      workspace: user.workspace,
+      ...(search
+        ? {
+            OR: [
+              { username: { contains: search, mode: 'insensitive' as const } },
+              {
+                fullName: { contains: search, mode: 'insensitive' as const },
+              },
+            ],
+          }
+        : {}),
+    };
 
     const [data, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -121,13 +128,18 @@ export class UsersService {
 
     if (
       !UUID_REGEX.test(id) ||
-      !(await this.prisma.user.findUnique({ where: { id } }))
+      !(await this.prisma.user.findUnique({
+        where: { id, workspace: user.workspace },
+      }))
     ) {
       throw new NotFoundException('المستخدم غير موجود');
     }
 
-    const updateData: { fullName?: string; role?: Role; isActive?: boolean } =
-      {};
+    const updateData: {
+      fullName?: string;
+      role?: Role;
+      isActive?: boolean;
+    } = {};
     if (dto.fullName !== undefined) updateData.fullName = dto.fullName;
     if (dto.role !== undefined) updateData.role = dto.role;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
@@ -146,7 +158,9 @@ export class UsersService {
 
     if (
       !UUID_REGEX.test(id) ||
-      !(await this.prisma.user.findUnique({ where: { id } }))
+      !(await this.prisma.user.findUnique({
+        where: { id, workspace: user.workspace },
+      }))
     ) {
       throw new NotFoundException('المستخدم غير موجود');
     }
@@ -169,13 +183,13 @@ export class UsersService {
     }
 
     const found = await this.prisma.user.findUnique({
-      where: { id },
+      where: { id, workspace: user.workspace },
       include: {
         _count: {
           select: {
-            createdInvoices: true,
-            createdQuotes: true,
-            createdPurchaseOrders: true,
+            createdInvoices: { where: { workspace: user.workspace } },
+            createdQuotes: { where: { workspace: user.workspace } },
+            createdPurchaseOrders: { where: { workspace: user.workspace } },
           },
         },
       },
@@ -207,7 +221,11 @@ export class UsersService {
 
     if (found.role === Role.admin && found.isActive) {
       const activeAdmins = await this.prisma.user.count({
-        where: { role: Role.admin, isActive: true },
+        where: {
+          role: Role.admin,
+          isActive: true,
+          workspace: user.workspace,
+        },
       });
       if (activeAdmins <= 1) {
         throw conflictWithCode(

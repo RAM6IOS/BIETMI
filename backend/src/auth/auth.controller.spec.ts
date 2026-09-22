@@ -7,11 +7,13 @@ describe('AuthController', () => {
   let controller: AuthController;
   let authService: {
     login: jest.Mock;
+    getMe: jest.Mock;
   };
 
   beforeEach(async () => {
     authService = {
       login: jest.fn(),
+      getMe: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -49,6 +51,28 @@ describe('AuthController', () => {
       await expect(controller.login(loginDto)).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  describe('me', () => {
+    it('forwards the authenticated user to getMe and returns the profile', async () => {
+      const authUser = {
+        userId: 'u1',
+        role: 'commercial' as const,
+        workspace: 'production' as const,
+      };
+      const profile = {
+        id: 'u1',
+        username: 'ali',
+        role: 'commercial',
+        isActive: true,
+      };
+      authService.getMe.mockResolvedValue(profile);
+
+      const result = await controller.me(authUser);
+
+      expect(result).toEqual(profile);
+      expect(authService.getMe).toHaveBeenCalledWith(authUser);
     });
   });
 });

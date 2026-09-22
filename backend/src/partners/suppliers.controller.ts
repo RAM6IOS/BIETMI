@@ -15,6 +15,8 @@ import { PartnerType, Role } from '@prisma/client';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/decorators/current-user.decorator';
 import { PartnersService } from './partners.service';
 import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
@@ -30,27 +32,43 @@ export class SuppliersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createPartnerDto: CreatePartnerDto) {
-    return this.partnersService.create(createPartnerDto, SUPPLIER_TYPE);
+  create(
+    @CurrentUser() user: AuthUser,
+    @Body() createPartnerDto: CreatePartnerDto,
+  ) {
+    return this.partnersService.create(
+      createPartnerDto,
+      SUPPLIER_TYPE,
+      user.workspace,
+    );
   }
 
   @Get()
-  findAll(@Query() query: ListPartnersDto) {
-    return this.partnersService.findAll(query, SUPPLIER_TYPE);
+  findAll(@CurrentUser() user: AuthUser, @Query() query: ListPartnersDto) {
+    return this.partnersService.findAll(query, SUPPLIER_TYPE, user.workspace);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.partnersService.findOne(id, SUPPLIER_TYPE);
+  findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.partnersService.findOne(id, SUPPLIER_TYPE, user.workspace);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePartnerDto: UpdatePartnerDto) {
-    return this.partnersService.update(id, updatePartnerDto, SUPPLIER_TYPE);
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() updatePartnerDto: UpdatePartnerDto,
+  ) {
+    return this.partnersService.update(
+      id,
+      updatePartnerDto,
+      SUPPLIER_TYPE,
+      user.workspace,
+    );
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.partnersService.remove(id, SUPPLIER_TYPE);
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.partnersService.remove(id, SUPPLIER_TYPE, user.workspace);
   }
 }

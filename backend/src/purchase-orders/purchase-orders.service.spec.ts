@@ -4,7 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { Prisma, Role, Workspace } from '@prisma/client';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,13 +12,15 @@ const UUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const SUPPLIER_ID = '11111111-2222-3333-4444-555555555555';
 const USER_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-const ADMIN = { userId: USER_ID, role: Role.admin };
-const PURCHASING = { userId: USER_ID, role: Role.purchasing };
+const workspace = Workspace.sandbox;
+
+const ADMIN = { userId: USER_ID, role: Role.admin, workspace };
+const PURCHASING = { userId: USER_ID, role: Role.purchasing, workspace };
 
 const PO_INCLUDE = {
   supplier: { select: { id: true, name: true, type: true, nif: true } },
   createdBy: { select: { id: true, username: true, fullName: true } },
-  lines: { orderBy: { id: 'asc' as const } },
+  lines: true,
 } as const;
 
 describe('PurchaseOrdersService', () => {
@@ -72,7 +74,7 @@ describe('PurchaseOrdersService', () => {
         },
       };
       prisma.$transaction.mockImplementation(
-        async (cb: (tx: typeof tx) => Promise<unknown>) => cb(tx),
+        async (cb: (tx: unknown) => Promise<unknown>) => cb(tx),
       );
       return tx;
     }
@@ -99,6 +101,7 @@ describe('PurchaseOrdersService', () => {
       expect(tx.purchaseOrder.create).toHaveBeenCalledWith({
         data: {
           supplierId: SUPPLIER_ID,
+          workspace,
           createdByUserId: USER_ID,
           orderNumber: '087',
           orderDate: new Date('2026-05-10'),
@@ -148,6 +151,7 @@ describe('PurchaseOrdersService', () => {
       expect(tx.purchaseOrder.create).toHaveBeenCalledWith({
         data: {
           supplierId: SUPPLIER_ID,
+          workspace,
           createdByUserId: USER_ID,
           orderNumber: '009',
           orderDate: new Date('2026-05-10'),
@@ -201,6 +205,7 @@ describe('PurchaseOrdersService', () => {
       expect(tx.purchaseOrder.create).toHaveBeenCalledWith({
         data: {
           supplierId: SUPPLIER_ID,
+          workspace,
           createdByUserId: USER_ID,
           orderNumber: '010',
           orderDate: new Date('2026-05-10'),
@@ -249,7 +254,7 @@ describe('PurchaseOrdersService', () => {
           supplierId: SUPPLIER_ID,
           lines: [{ description: 'A', quantity: 1, unitPrice: 10 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should not start a transaction when supplier validation fails', async () => {
@@ -260,7 +265,7 @@ describe('PurchaseOrdersService', () => {
           supplierId: SUPPLIER_ID,
           lines: [{ description: 'A', quantity: 1, unitPrice: 10 }],
         }),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow(NotFoundException);
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
@@ -321,6 +326,7 @@ describe('PurchaseOrdersService', () => {
 
       expect(prisma.purchaseOrder.findMany).toHaveBeenCalledWith({
         where: {
+          workspace,
           OR: [
             {
               orderNumber: {
@@ -354,7 +360,7 @@ describe('PurchaseOrdersService', () => {
       await service.findAll(ADMIN, { status: 'sent' });
 
       expect(prisma.purchaseOrder.findMany).toHaveBeenCalledWith({
-        where: { status: 'sent' },
+        where: { status: 'sent', workspace },
         include: PO_INCLUDE,
         orderBy: { createdAt: 'desc' },
         skip: 0,
@@ -389,7 +395,7 @@ describe('PurchaseOrdersService', () => {
       const result = await service.findOne(ADMIN, UUID);
 
       expect(prisma.purchaseOrder.findUnique).toHaveBeenCalledWith({
-        where: { id: UUID },
+        where: { id: UUID, workspace },
         include: PO_INCLUDE,
       });
       expect(result.id).toBe(UUID);

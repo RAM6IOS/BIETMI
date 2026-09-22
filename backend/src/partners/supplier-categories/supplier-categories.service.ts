@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { Workspace } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSupplierCategoryDto } from './dto/create-supplier-category.dto';
 import { UpdateSupplierCategoryDto } from './dto/update-supplier-category.dto';
@@ -14,15 +15,16 @@ const UUID_REGEX =
 export class SupplierCategoriesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(workspace: Workspace) {
     return this.prisma.supplierCategory.findMany({
+      where: { workspace },
       orderBy: { name: 'asc' },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, workspace: Workspace) {
     const category = await this.prisma.supplierCategory.findUnique({
-      where: { id },
+      where: { id, workspace },
     });
 
     if (!category) {
@@ -32,10 +34,10 @@ export class SupplierCategoriesService {
     return category;
   }
 
-  async create(dto: CreateSupplierCategoryDto) {
+  async create(dto: CreateSupplierCategoryDto, workspace: Workspace) {
     try {
       return await this.prisma.supplierCategory.create({
-        data: { name: dto.name },
+        data: { name: dto.name, workspace },
       });
     } catch (error) {
       this.rethrowUniqueConflict(error);
@@ -43,8 +45,12 @@ export class SupplierCategoriesService {
     }
   }
 
-  async update(id: string, dto: UpdateSupplierCategoryDto) {
-    await this.ensureExists(id);
+  async update(
+    id: string,
+    dto: UpdateSupplierCategoryDto,
+    workspace: Workspace,
+  ) {
+    await this.ensureExists(id, workspace);
 
     try {
       return await this.prisma.supplierCategory.update({
@@ -57,13 +63,13 @@ export class SupplierCategoriesService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, workspace: Workspace) {
     if (!UUID_REGEX.test(id)) {
       throw new NotFoundException('التصنيف غير موجود');
     }
 
     const category = await this.prisma.supplierCategory.findUnique({
-      where: { id },
+      where: { id, workspace },
       include: { _count: { select: { partners: true } } },
     });
 
@@ -78,13 +84,13 @@ export class SupplierCategoriesService {
     return this.prisma.supplierCategory.delete({ where: { id } });
   }
 
-  private async ensureExists(id: string) {
+  private async ensureExists(id: string, workspace: Workspace) {
     if (!UUID_REGEX.test(id)) {
       throw new NotFoundException('التصنيف غير موجود');
     }
 
     const existing = await this.prisma.supplierCategory.findUnique({
-      where: { id },
+      where: { id, workspace },
     });
 
     if (!existing) {

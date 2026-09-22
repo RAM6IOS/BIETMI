@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import * as bcrypt from 'bcrypt';
 import { AppModule } from '../src/app.module';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 interface LoginResponse {
@@ -24,6 +25,8 @@ interface QuoteResponse {
   supersedesQuoteId: string | null;
   supersedesQuote: { id: string; quoteNumber: string; status: string } | null;
   revisions: Array<{ id: string; quoteNumber: string; status: string }>;
+  createdAt: string;
+  updatedAt: string;
   partner: { id: string; name: string; type: string };
   createdBy: { id: string; username: string; fullName: string };
   lines: Array<{
@@ -56,8 +59,8 @@ async function createUser(
   const passwordHash = await bcrypt.hash('testpassword', 12);
   await prisma.user.upsert({
     where: { username },
-    update: { role },
-    create: { username, passwordHash, role, fullName: username },
+    update: { role: role as Role },
+    create: { username, passwordHash, role: role as Role, fullName: username },
   });
 }
 
@@ -258,7 +261,7 @@ describe('Quotes (e2e)', () => {
     it('should reject a quote linked to a missing partner', async () => {
       await createQuote(adminToken, {
         partnerId: '00000000-0000-4000-8000-000000000000',
-      }).expect(400);
+      }).expect(404);
     });
 
     it('should forbid purchasing and accountant users', async () => {
