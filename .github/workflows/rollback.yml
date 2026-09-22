@@ -34,7 +34,8 @@ jobs:
             echo "::notice::rolled back to $(git rev-parse --short HEAD)"
 
             npm ci
-            npm rebuild @tailwindcss/oxide --workspace=frontend || true
+            OXIDE_V=$(node -p "require('./frontend/node_modules/@tailwindcss/oxide/package.json').version")
+            npm install --no-save --no-package-lock --workspace=frontend "@tailwindcss/oxide-linux-x64-gnu@$OXIDE_V"
 
             cd backend
             npx prisma generate

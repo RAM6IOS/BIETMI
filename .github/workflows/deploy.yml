@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Ensure @tailwindcss/oxide native binding (known npm flake)
+        run: |
+          V=$(node -p "require('./frontend/node_modules/@tailwindcss/oxide/package.json').version")
+          npm install --no-save --no-package-lock --workspace=frontend "@tailwindcss/oxide-linux-x64-gnu@$V"
+
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=backend
 
@@ -52,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Run deployment over SSH + PM2
+      - name: Deploy to production (SSH + PM2)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -73,8 +78,9 @@ jobs:
 
             npm ci
 
-            # Safe-guard against the known @tailwindcss/oxide optional-native-binding flake
-            npm rebuild @tailwindcss/oxide --workspace=frontend || true
+            # @tailwindcss/oxide optional native binding is flaky under npm — pin it explicitly
+            OXIDE_V=$(node -p "require('./frontend/node_modules/@tailwindcss/oxide/package.json').version")
+            npm install --no-save --no-package-lock --workspace=frontend "@tailwindcss/oxide-linux-x64-gnu@$OXIDE_V"
 
             cd backend
             npx prisma migrate deploy
