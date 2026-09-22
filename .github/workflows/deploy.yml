@@ -13,6 +13,8 @@ jobs:
   ci:
     name: Quality gates
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.CI_DB_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,8 +28,6 @@ jobs:
 
       - name: Validate Prisma schema
         run: npm run prisma:validate --workspace=backend
-        env:
-          DATABASE_URL: ${{ secrets.CI_DB_URL }}
 
       - name: Build all workspaces (tsc + nest + vite)
         run: npm run build --workspaces
