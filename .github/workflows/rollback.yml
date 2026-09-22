@@ -1,0 +1,56 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (commit SHA / tag / branch) to roll back to
+        required: true
+
+jobs:
+  rollback:
+    name: Roll back production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Roll back over SSH + PM2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd /srv/bietmi
+
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "::error::dirty tracked worktree — aborting rollback"
+              exit 1
+            fi
+
+            git fetch origin
+            git checkout --force "${{ inputs.ref }}"
+            echo "::notice::rolled back to $(git rev-parse --short HEAD)"
+
+            npm ci
+            npm rebuild @tailwindcss/oxide --workspace=frontend || true
+
+            cd backend
+            npx prisma generate
+            cd ..
+
+            npm run build --workspaces
+
+            pm2 restart bietmi-backend
+            pm2 save
+            rsync -a --delete frontend/dist/ /var/www/bietmi/
+
+            CODE=000
+            for i in $(seq 1 15); do
+              CODE=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/auth/me || true)
+              if [ "$CODE" = "401" ] || [ "$CODE" = "200" ]; then break; fi
+              sleep 2
+            done
+            echo "::notice::post-rollback health code = $CODE (401/200 expected)"
+            test "$CODE" = "401" -o "$CODE" = "200"

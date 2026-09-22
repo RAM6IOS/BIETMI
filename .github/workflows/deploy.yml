@@ -1,0 +1,93 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: bietmi-deploy
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate --schema backend/prisma/schema.prisma
+
+      - name: Build all workspaces (tsc + nest + vite)
+        run: npm run build --workspaces
+
+      - name: Backend unit tests
+        run: npm test --workspace=backend
+
+      - name: Frontend tests
+        run: npm test --workspace=frontend
+
+      - name: Security audit (non-blocking until zero-high fixed)
+        continue-on-error: true
+        run: npm audit --audit-level=high --omit=dev
+
+  deploy:
+    name: Deploy to production
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Run deployment over SSH + PM2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd /srv/bietmi
+
+            if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+              echo "::error::dirty tracked worktree — aborting deploy"
+              exit 1
+            fi
+
+            git pull --ff-only origin main
+            echo "::notice::deployed ref $(git rev-parse --short HEAD)"
+
+            npm ci
+
+            # Safe-guard against the known @tailwindcss/oxide optional-native-binding flake
+            npm rebuild @tailwindcss/oxide --workspace=frontend || true
+
+            cd backend
+            npx prisma migrate deploy
+            npx prisma generate
+            cd ..
+
+            npm run build --workspaces
+
+            pm2 restart bietmi-backend
+            pm2 save
+
+            rsync -a --delete frontend/dist/ /var/www/bietmi/
+
+            CODE=000
+            for i in $(seq 1 15); do
+              CODE=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/v1/auth/me || true)
+              if [ "$CODE" = "401" ] || [ "$CODE" = "200" ]; then break; fi
+              sleep 2
+            done
+            echo "::notice::post-deploy health code = $CODE (401/200 expected)"
+            test "$CODE" = "401" -o "$CODE" = "200"
