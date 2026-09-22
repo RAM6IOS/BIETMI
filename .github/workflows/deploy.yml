@@ -26,6 +26,8 @@ jobs:
 
       - name: Validate Prisma schema
         run: npm run prisma:validate --workspace=backend
+        env:
+          DATABASE_URL: ${{ secrets.CI_DB_URL }}
 
       - name: Build all workspaces (tsc + nest + vite)
         run: npm run build --workspaces
