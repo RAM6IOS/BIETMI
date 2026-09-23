@@ -22,6 +22,7 @@ describe('MailService', () => {
     'SMTP_USER',
     'SMTP_PASS',
     'MAIL_FROM',
+    'SMTP_SKIP_VERIFY',
   ] as const;
 
   let originalEnv: Record<string, string | undefined>;
@@ -71,6 +72,24 @@ describe('MailService', () => {
 
     expect(mockCreateTransport).toHaveBeenCalled();
     expect(service.getTransportType()).toBe('smtp');
+  });
+
+  it('skips the SMTP connection check at boot when SMTP_SKIP_VERIFY=true', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.SMTP_HOST = 'smtp.gmail.com';
+    process.env.SMTP_PORT = '465';
+    process.env.SMTP_SECURE = 'true';
+    process.env.SMTP_USER = 'user@example.com';
+    process.env.SMTP_PASS = 'secret';
+    process.env.SMTP_SKIP_VERIFY = 'true';
+    const transport = { verify: jest.fn().mockResolvedValue(true) };
+    mockCreateTransport.mockReturnValue(transport);
+
+    const service = new MailService();
+    await service.initTransporter();
+
+    expect(service.getTransportType()).toBe('smtp');
+    expect(transport.verify).not.toHaveBeenCalled();
   });
 
   it('falls back to an Ethereal account in development when SMTP_HOST is missing', async () => {

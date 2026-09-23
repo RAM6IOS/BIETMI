@@ -60,15 +60,20 @@ export class MailService implements OnModuleInit {
       this.transportType = 'smtp';
       this.logger.log(`Mail transporter: SMTP (${smtpHost})`);
 
-      if (process.env.NODE_ENV === 'production') {
+      if (
+        process.env.NODE_ENV === 'production' &&
+        process.env.SMTP_SKIP_VERIFY !== 'true'
+      ) {
         // Surface a misconfigured SMTP (bad credentials/TLS) at boot instead
         // of letting every password reset silently fail at send time.
+        // Set SMTP_SKIP_VERIFY=true to avoid an SMTP login attempt at every
+        // boot (e.g. while the provider has temporarily throttled the IP).
         try {
           await this.transporter.verify();
           this.logger.log('SMTP connection verified successfully.');
         } catch (err) {
-          this.logger.error(
-            `SMTP connection verify failed — password reset emails will not be delivered: ${err instanceof Error ? err.message : String(err)}`,
+          this.logger.warn(
+            `SMTP connection could not be verified at boot — sends will retry anyway: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
       }
