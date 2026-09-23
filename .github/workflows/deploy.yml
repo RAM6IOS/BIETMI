@@ -28,8 +28,9 @@ jobs:
 
       - name: Ensure @tailwindcss/oxide native binding (known npm flake)
         run: |
-          V=$(node -p "require('./frontend/node_modules/@tailwindcss/oxide/package.json').version")
-          npm install --no-save --no-package-lock --workspace=frontend "@tailwindcss/oxide-linux-x64-gnu@$V"
+          OXIDE_V=$(node -e "const l=require('./package-lock.json').packages; const k=['node_modules/@tailwindcss/oxide','frontend/node_modules/@tailwindcss/oxide'].find(k=>l[k]&&l[k].version); if(!k){process.stderr.write('oxide version not found in package-lock.json\n');process.exit(1)}; console.log(l[k].version)")
+          if [ -d frontend/node_modules/@tailwindcss/oxide ]; then W="--workspace=frontend"; else W=""; fi
+          npm install --no-save --no-package-lock $W "@tailwindcss/oxide-linux-x64-gnu@$OXIDE_V"
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=backend
@@ -92,9 +93,12 @@ jobs:
 
             npm ci
 
-            # @tailwindcss/oxide optional native binding is flaky under npm — pin it explicitly
-            OXIDE_V=$(node -p "require('./frontend/node_modules/@tailwindcss/oxide/package.json').version")
-            npm install --no-save --no-package-lock --workspace=frontend "@tailwindcss/oxide-linux-x64-gnu@$OXIDE_V"
+            # @tailwindcss/oxide optional native binding is flaky under npm — pin it explicitly.
+            # Version is read from the lockfile (layout-independent), and the binary is installed
+            # next to wherever npm actually placed @tailwindcss/oxide (root vs frontend/node_modules).
+            OXIDE_V=$(node -e "const l=require('./package-lock.json').packages; const k=['node_modules/@tailwindcss/oxide','frontend/node_modules/@tailwindcss/oxide'].find(k=>l[k]&&l[k].version); if(!k){process.stderr.write('oxide version not found in package-lock.json\n');process.exit(1)}; console.log(l[k].version)")
+            if [ -d frontend/node_modules/@tailwindcss/oxide ]; then W="--workspace=frontend"; else W=""; fi
+            npm install --no-save --no-package-lock $W "@tailwindcss/oxide-linux-x64-gnu@$OXIDE_V"
 
             cd backend
             npx prisma migrate deploy
