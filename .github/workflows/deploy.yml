@@ -76,6 +76,20 @@ jobs:
             git pull --ff-only origin main
             echo "::notice::deployed ref $(git rev-parse --short HEAD)"
 
+            # Guard: without SMTP/FRONTEND_URL the password-reset email path is
+            # broken (email silently never sent). Fail the deploy in clear terms
+            # instead of shipping a silently-failing feature.
+            MISSING=0
+            for VAR in SMTP_HOST SMTP_USER SMTP_PASS FRONTEND_URL; do
+              if ! grep -Eq "^${VAR}=.+" backend/.env 2>/dev/null; then
+                echo "::error::${VAR} missing in backend/.env — password reset emails cannot be sent; add it and retry"
+                MISSING=1
+              fi
+            done
+            if [ "$MISSING" = "1" ]; then
+              exit 1
+            fi
+
             npm ci
 
             # @tailwindcss/oxide optional native binding is flaky under npm — pin it explicitly

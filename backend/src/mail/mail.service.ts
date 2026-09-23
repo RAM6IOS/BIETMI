@@ -9,13 +9,30 @@ import type { Transporter } from 'nodemailer';
  * (production and development), so password-reset emails are deliverable
  * even on a local machine.
  *
- * When SMTP_HOST is absent, falls back to an Ethereal (fake SMTP) account,
- * whose preview URL is logged so developers can inspect sent emails.
+ * In production, a missing SMTP_HOST is treated as a fatal configuration
+ * error: the app refuses to boot rather than silently switching to a fake
+ * (Ethereal/JSON) transporter that would never deliver the reset email.
+ *
+ * Outside production, missing SMTP_HOST falls back to an Ethereal (fake
+ * SMTP) account, whose preview URL is logged so developers can inspect
+ * sent emails.
  */
+type TransportType = 'smtp' | 'ethereal' | 'json' | 'uninitialized';
+
+interface SentMailResult {
+  messageId?: string;
+  accepted?: string[];
+}
+
 @Injectable()
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter!: Transporter;
+  private transportType: TransportType = 'uninitialized';
+
+  getTransportType(): TransportType {
+    return this.transportType;
+  }
 
   async onModuleInit(): Promise<void> {
     if (process.env.NODE_ENV === 'test') {
@@ -40,17 +57,34 @@ export class MailService implements OnModuleInit {
           pass: process.env.SMTP_PASS,
         },
       });
+      this.transportType = 'smtp';
       this.logger.log(`Mail transporter: SMTP (${smtpHost})`);
+
+      if (process.env.NODE_ENV === 'production') {
+        // Surface a misconfigured SMTP (bad credentials/TLS) at boot instead
+        // of letting every password reset silently fail at send time.
+        try {
+          await this.transporter.verify();
+          this.logger.log('SMTP connection verified successfully.');
+        } catch (err) {
+          this.logger.error(
+            `SMTP connection verify failed — password reset emails will not be delivered: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
       return;
     }
 
     if (process.env.NODE_ENV === 'production') {
-      this.logger.warn(
-        'SMTP_HOST is not configured in production — password reset emails will NOT be delivered.',
+      throw new Error(
+        'SMTP_HOST is not configured in production — password reset emails will NOT be delivered. ' +
+          'Refusing to start with a fake mail transporter. Set SMTP_HOST (and SMTP_PORT/SMTP_SECURE/' +
+          'SMTP_USER/SMTP_PASS/MAIL_FROM/FRONTEND_URL) in the server environment.',
       );
     }
 
-    // No SMTP configured: create a one-time Ethereal test account with fallback to jsonTransport if offline/timeout.
+    // No SMTP configured outside production: create a one-time Ethereal test
+    // account with a jsonTransport fallback if the Ethereal API is unreachable.
     try {
       const testAccount = await nodemailer.createTestAccount();
       this.transporter = nodemailer.createTransport({
@@ -62,6 +96,7 @@ export class MailService implements OnModuleInit {
           pass: testAccount.pass,
         },
       });
+      this.transportType = 'ethereal';
       this.logger.log(
         `Mail transporter: Ethereal (${testAccount.user}) — emails are fake and captured at https://ethereal.email`,
       );
@@ -72,6 +107,7 @@ export class MailService implements OnModuleInit {
       this.transporter = nodemailer.createTransport({
         jsonTransport: true,
       });
+      this.transportType = 'json';
     }
   }
 
@@ -82,7 +118,7 @@ export class MailService implements OnModuleInit {
     }
 
     try {
-      const info = await this.transporter.sendMail({
+      const sent = (await this.transporter.sendMail({
         from: process.env.MAIL_FROM ?? '"BIETMI ERP" <noreply@bietmi.local>',
         to,
         subject: 'استعادة كلمة المرور / Réinitialisation du mot de passe',
@@ -108,16 +144,27 @@ export class MailService implements OnModuleInit {
           </p>
         </div>
       `,
-      });
+      })) as SentMailResult;
 
-      // In development, log the Ethereal preview URL so the developer can
-      // inspect the email in their browser without any SMTP setup.
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      if (previewUrl) {
-        this.logger.log(`Password reset email sent. Preview: ${previewUrl}`);
-      } else {
-        this.logger.log(`Password reset email sent (JSON transport).`);
+      // In non-production environments, log the Ethereal preview URL so the
+      // developer can inspect the email in their browser without any SMTP setup.
+      if (process.env.NODE_ENV !== 'production') {
+        const previewUrl = nodemailer.getTestMessageUrl(
+          sent as unknown as Parameters<typeof nodemailer.getTestMessageUrl>[0],
+        );
+        if (previewUrl) {
+          this.logger.log(`Password reset email sent. Preview: ${previewUrl}`);
+        }
       }
+
+      const messageId = sent.messageId ?? 'n/a';
+      const recipients =
+        sent.accepted && sent.accepted.length > 0
+          ? `, delivered to: ${sent.accepted.join(', ')}`
+          : '';
+      this.logger.log(
+        `Password reset email sent (${this.transportType}) to ${to}, messageId: ${messageId}${recipients}`,
+      );
     } catch (err) {
       this.logger.error(
         `Failed to send password reset email to ${to}: ${err instanceof Error ? err.message : String(err)}`,
