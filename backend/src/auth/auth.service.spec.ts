@@ -287,6 +287,45 @@ describe('AuthService', () => {
       );
     });
 
+    it('builds the reset link with a single slash even when FRONTEND_URL has a trailing slash', async () => {
+      process.env.FRONTEND_URL = 'http://5.39.19.135/';
+      const user = {
+        id: 'user-uuid',
+        username: 'admin_bietmi',
+        email: 'admin@bietmi.dz',
+        passwordHash: '$2b$12$somehash',
+        role: 'admin',
+        fullName: 'Admin',
+        isActive: true,
+        mustChangePassword: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      prisma.user.findUnique.mockResolvedValue(user);
+      prisma.passwordResetToken.create.mockResolvedValue({});
+
+      let capturedResetLink = '';
+      mailService.sendPasswordResetEmail.mockImplementation(
+        (_to: string, link: string) => {
+          capturedResetLink = link;
+          return Promise.resolve();
+        },
+      );
+
+      try {
+        await service.forgotPassword(user.email);
+
+        // Double slash would break SPA routing (//reset-password never matches
+        // the /reset-password route). The link must be a single slash.
+        expect(capturedResetLink).not.toContain('//reset');
+        expect(capturedResetLink).toMatch(
+          /^http:\/\/5\.39\.19\.135\/reset-password\?token=[0-9a-f]{64}$/,
+        );
+      } finally {
+        delete process.env.FRONTEND_URL;
+      }
+    });
+
     it('stores only the SHA-256 hash, not the raw token, in the database', async () => {
       const user = {
         id: 'user-uuid',

@@ -138,7 +138,11 @@ export class AuthService {
       },
     });
 
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    // Normalize any trailing slashes so the link is never http://host//path —
+    // a doubled slash would not match the SPA's /reset-password route.
+    const frontendUrl = (
+      process.env.FRONTEND_URL ?? 'http://localhost:5173'
+    ).replace(/\/+$/, '');
     const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
 
     await this.mailService.sendPasswordResetEmail(user.email!, resetLink);
