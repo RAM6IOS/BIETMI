@@ -144,17 +144,17 @@ function AppContent() {
     return () => window.removeEventListener('focus', onFocus);
   }, [isAuthenticated, refreshMe]);
 
-  if (!isAuthenticated) {
-    return (
-      <Routes>
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
+  return (
+    <Routes>
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {isAuthenticated ? (
+        <Route path="/*" element={<DashboardLayout />} />
+      ) : (
         <Route path="*" element={<LoginForm />} />
-      </Routes>
-    );
-  }
-
-  return <DashboardLayout />;
+      )}
+    </Routes>
+  );
 }
 
 function App() {
